@@ -1,4 +1,4 @@
-# Command Board
+# DM Dash - a Command Board
 
 A personal **work command board** — a drag-and-drop prioritization surface that sits on top of your GitHub-and-notes world. Desktop-first, installable on your phone, single user. Built to answer one question fast: _what should I be working on right now, and what am I about to forget?_
 
@@ -12,12 +12,6 @@ A personal **work command board** — a drag-and-drop prioritization surface tha
 ---
 
 ## Quick start (demo mode — no setup)
-
-```bash
-npm install
-npm run dev
-```
-
 Open http://localhost:3000. With no Airtable keys set, the app runs on **in-memory demo data** (persisted to `.data/db.json`) so you can try the board immediately.
 
 > Demo mode is for local play only — it won't persist on an ephemeral host. Wire up Airtable to go live.
