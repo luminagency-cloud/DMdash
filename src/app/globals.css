@@ -354,6 +354,40 @@ select {
   color: #a8b1bd;
 }
 
+.card .card-title {
+  padding-right: 28px;
+}
+.card-move {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.card-move button {
+  width: 22px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 9px;
+  line-height: 1;
+  padding: 0;
+}
+.card-move button:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.card-move button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 .add-card {
   min-width: 0;
 }

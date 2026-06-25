@@ -13,7 +13,6 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
@@ -53,8 +52,6 @@ export default function Board() {
     router.push(`/project/${id}`);
   }
 
-  // Mouse uses a small drag threshold; touch uses a long-press so vertical
-  // scrolling on the phone still works inside the bands.
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
@@ -87,8 +84,8 @@ export default function Board() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-pull whenever the tab regains focus / becomes visible, so changes made
-  // elsewhere (a project added in Airtable, another device) show without a reload.
+  // Re-pull when the tab regains focus / becomes visible, so changes made
+  // elsewhere (Airtable, another device) show without a manual reload.
   useEffect(() => {
     const refresh = () => {
       if (!document.hidden) load();
@@ -107,58 +104,60 @@ export default function Board() {
     return LANES.find((l) => items[l].includes(id));
   }
 
-  function takeSnapshot() {
+  function onDragStart(e: DragStartEvent) {
     const snap: Record<string, { lane: Lane; index: number }> = {};
     for (const l of LANES) items[l].forEach((id, index) => (snap[id] = { lane: l, index }));
     snapshot.current = snap;
-  }
-
-  function onDragStart(e: DragStartEvent) {
-    takeSnapshot();
     setActiveId(String(e.active.id));
   }
 
-  function onDragOver(e: DragOverEvent) {
-    const activeId = String(e.active.id);
-    const overId = e.over ? String(e.over.id) : null;
-    if (!overId) return;
-    const from = findContainer(activeId);
-    const to = findContainer(overId);
-    if (!from || !to || from === to) return;
-    setItems((prev) => {
-      const fromItems = [...prev[from]];
-      const toItems = [...prev[to]];
-      const fromIdx = fromItems.indexOf(activeId);
-      if (fromIdx < 0) return prev;
-      fromItems.splice(fromIdx, 1);
-      const overIdx = toItems.indexOf(overId);
-      const insertAt = overIdx >= 0 ? overIdx : toItems.length;
-      toItems.splice(insertAt, 0, activeId);
-      return { ...prev, [from]: fromItems, [to]: toItems };
-    });
-  }
-
+  // Cross-lane and within-lane moves are resolved once, on drop — no setState
+  // during the drag, which is what caused the update-depth loop.
   function onDragEnd(e: DragEndEvent) {
     const activeId = String(e.active.id);
     const overId = e.over ? String(e.over.id) : null;
     setActiveId(null);
     suppressClick.current = Date.now() + 250;
+    if (!overId) return;
 
-    let final = items;
-    if (overId) {
-      const from = findContainer(activeId);
-      const to = findContainer(overId);
-      if (from && to && from === to) {
-        const arr = items[from];
-        const oldIndex = arr.indexOf(activeId);
-        const newIndex = arr.indexOf(overId);
-        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-          final = { ...items, [from]: arrayMove(arr, oldIndex, newIndex) };
-        }
-      }
+    const from = findContainer(activeId);
+    const to = findContainer(overId);
+    if (!from || !to) return;
+
+    let final: ItemMap;
+    if (from === to) {
+      const arr = items[from];
+      const oldIndex = arr.indexOf(activeId);
+      const newIndex = arr.indexOf(overId);
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+      final = { ...items, [from]: arrayMove(arr, oldIndex, newIndex) };
+    } else {
+      const fromArr = items[from].filter((x) => x !== activeId);
+      const toArr = [...items[to]];
+      const overIdx = toArr.indexOf(overId); // -1 when dropping on an empty lane
+      toArr.splice(overIdx >= 0 ? overIdx : toArr.length, 0, activeId);
+      final = { ...items, [from]: fromArr, [to]: toArr };
     }
     setItems(final);
     persist(activeId, final);
+  }
+
+  // Promote (up = more important) / demote (down) by one band — the reliable,
+  // touch-friendly way to move a card, no dragging needed.
+  function moveLane(id: string, dir: "up" | "down") {
+    const cur = findContainer(id);
+    if (!cur) return;
+    const target = LANES[LANES.indexOf(cur) + (dir === "up" ? -1 : 1)];
+    if (!target) return;
+    const final: ItemMap = {
+      ...items,
+      [cur]: items[cur].filter((x) => x !== id),
+      [target]: [...items[target], id],
+    };
+    snapshot.current = {};
+    for (const l of LANES) items[l].forEach((x, index) => (snapshot.current[x] = { lane: l, index }));
+    setItems(final);
+    persist(id, final);
   }
 
   async function persist(movedId: string, map: ItemMap) {
@@ -183,16 +182,18 @@ export default function Board() {
     setById((prev) => {
       const moved = prev[movedId];
       if (!moved) return prev;
-      const updated: ProjectView = {
-        ...moved,
-        lane: movedTo || moved.lane,
-        lastTouched: new Date().toISOString(),
-        daysUntouched: 0,
-        snoozeUntil: movedTo === "snooze" ? snoozeUntil : null,
-        agingStage: movedTo === "snooze" ? "snoozed" : "fresh",
-        woke: false,
+      return {
+        ...prev,
+        [movedId]: {
+          ...moved,
+          lane: movedTo || moved.lane,
+          lastTouched: new Date().toISOString(),
+          daysUntouched: 0,
+          snoozeUntil: movedTo === "snooze" ? snoozeUntil : null,
+          agingStage: movedTo === "snooze" ? "snoozed" : "fresh",
+          woke: false,
+        },
       };
-      return { ...prev, [movedId]: updated };
     });
 
     try {
@@ -213,13 +214,11 @@ export default function Board() {
       return;
     }
     try {
-      const { project } = await api<{ project: ProjectView }>("/api/projects", {
+      await api<{ project: ProjectView }>("/api/projects", {
         method: "POST",
         body: JSON.stringify({ name, lane }),
       });
-      setById((p) => ({ ...p, [project.id]: project }));
-      setItems((p) => ({ ...p, [lane]: [...p[lane], project.id] }));
-      await load(); // reconcile with the server so the new card always renders
+      await load(); // re-pull so the new card is guaranteed on screen
     } catch (e: any) {
       setError(e.message || "Could not add");
     } finally {
@@ -228,10 +227,7 @@ export default function Board() {
     }
   }
 
-  const staleList = useMemo(
-    () => Object.values(byId).filter((p) => p.agingStage === "stale"),
-    [byId]
-  );
+  const staleList = useMemo(() => Object.values(byId).filter((p) => p.agingStage === "stale"), [byId]);
   const wipExceeded = !!settings && settings.wipLimit != null && items.today.length > settings.wipLimit;
   const lanesToShow: Lane[] = focus ? ["today"] : LANES;
 
@@ -245,7 +241,7 @@ export default function Board() {
         <button className={`focus-btn ${focus ? "on" : ""}`} onClick={() => setFocus((f) => !f)}>
           {focus ? "← Exit focus" : "◎ Focus"}
         </button>
-        <span className="toolbar-hint">↑ Up = more important · drag between bands</span>
+        <span className="toolbar-hint">↑ Up = more important · drag or use the ▲▼ on a card</span>
       </div>
 
       {error && (
@@ -278,7 +274,6 @@ export default function Board() {
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={onDragStart}
-        onDragOver={onDragOver}
         onDragEnd={onDragEnd}
       >
         <div className="board">
@@ -298,13 +293,14 @@ export default function Board() {
               onSubmitAdd={() => addProject(lane)}
               onCancelAdd={() => setAddingLane(null)}
               onOpen={openProject}
+              onMove={moveLane}
               wipLimit={lane === "today" ? settings?.wipLimit ?? null : null}
             />
           ))}
         </div>
 
         <DragOverlay>
-          {activeId && byId[activeId] ? <Card project={byId[activeId]} dragging onOpen={() => {}} /> : null}
+          {activeId && byId[activeId] ? <Card project={byId[activeId]} dragging onOpen={() => {}} onMove={() => {}} /> : null}
         </DragOverlay>
       </DndContext>
 
@@ -326,6 +322,7 @@ function LaneColumn({
   onSubmitAdd,
   onCancelAdd,
   onOpen,
+  onMove,
   wipLimit,
 }: {
   lane: Lane;
@@ -338,6 +335,7 @@ function LaneColumn({
   onSubmitAdd: () => void;
   onCancelAdd: () => void;
   onOpen: (id: string) => void;
+  onMove: (id: string, dir: "up" | "down") => void;
   wipLimit: number | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: lane });
@@ -359,7 +357,7 @@ function LaneColumn({
       <div ref={setNodeRef} className="lane-body">
         <SortableContext items={itemIds} strategy={rectSortingStrategy}>
           {itemIds.map((id) => (
-            <SortableCard key={id} id={id} project={byId[id]} onOpen={onOpen} />
+            <SortableCard key={id} id={id} project={byId[id]} onOpen={onOpen} onMove={onMove} />
           ))}
         </SortableContext>
 
@@ -389,10 +387,12 @@ function SortableCard({
   id,
   project,
   onOpen,
+  onMove,
 }: {
   id: string;
   project: ProjectView;
   onOpen: (id: string) => void;
+  onMove: (id: string, dir: "up" | "down") => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
@@ -402,7 +402,7 @@ function SortableCard({
   };
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="card-wrap">
-      <Card project={project} onOpen={onOpen} />
+      <Card project={project} onOpen={onOpen} onMove={onMove} />
     </div>
   );
 }
@@ -410,16 +410,24 @@ function SortableCard({
 function Card({
   project,
   onOpen,
+  onMove,
   dragging,
 }: {
   project: ProjectView;
   onOpen: (id: string) => void;
+  onMove: (id: string, dir: "up" | "down") => void;
   dragging?: boolean;
 }) {
   const wake =
     project.snoozeUntil && project.agingStage === "snoozed"
       ? Math.ceil((new Date(project.snoozeUntil).getTime() - Date.now()) / 86400000)
       : null;
+  const atTop = project.lane === LANES[0];
+  const atBottom = project.lane === LANES[LANES.length - 1];
+
+  // Buttons stop pointer/click propagation so they neither start a drag nor open the card.
+  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+
   return (
     <article
       className={`card aging-${project.agingStage} ${dragging ? "card-dragging" : ""}`}
@@ -427,6 +435,32 @@ function Card({
       onClick={() => onOpen(project.id)}
     >
       <div className="card-strip" />
+      {!dragging && (
+        <div className="card-move" onPointerDown={stop}>
+          <button
+            aria-label="Promote"
+            disabled={atTop}
+            onPointerDown={stop}
+            onClick={(e) => {
+              stop(e);
+              onMove(project.id, "up");
+            }}
+          >
+            ▲
+          </button>
+          <button
+            aria-label="Demote"
+            disabled={atBottom}
+            onPointerDown={stop}
+            onClick={(e) => {
+              stop(e);
+              onMove(project.id, "down");
+            }}
+          >
+            ▼
+          </button>
+        </div>
+      )}
       <div className="card-main">
         <h3 className="card-title">{project.name}</h3>
         <div className="card-meta">
