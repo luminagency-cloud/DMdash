@@ -87,6 +87,21 @@ export default function Board() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Re-pull whenever the tab regains focus / becomes visible, so changes made
+  // elsewhere (a project added in Airtable, another device) show without a reload.
+  useEffect(() => {
+    const refresh = () => {
+      if (!document.hidden) load();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function findContainer(id: string): Lane | undefined {
     if ((LANES as string[]).includes(id)) return id as Lane;
     return LANES.find((l) => items[l].includes(id));
@@ -204,6 +219,7 @@ export default function Board() {
       });
       setById((p) => ({ ...p, [project.id]: project }));
       setItems((p) => ({ ...p, [lane]: [...p[lane], project.id] }));
+      await load(); // reconcile with the server so the new card always renders
     } catch (e: any) {
       setError(e.message || "Could not add");
     } finally {

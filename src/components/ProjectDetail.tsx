@@ -124,6 +124,9 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
     });
     setTasks((t) => [...t, task]);
     setNewTask("");
+    // Reconcile with the server so the new to-do is guaranteed on screen.
+    const fresh = await api<{ tasks: Task[] }>(`/api/tasks?projectId=${projectId}`);
+    setTasks(fresh.tasks);
   }
 
   async function toggleTask(task: Task) {
