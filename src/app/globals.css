@@ -43,9 +43,9 @@ select {
 
 .app {
   min-height: 100vh;
-  padding: 18px 22px 60px;
-  max-width: 1500px;
-  margin: 0 auto;
+  padding: 18px 26px 64px;
+  max-width: none;
+  margin: 0;
 }
 
 /* ---------- Header ---------- */
@@ -86,6 +86,37 @@ select {
 .nav-link:hover {
   color: var(--text);
   border-color: var(--accent-dim);
+}
+
+/* ---------- Toolbar ---------- */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.focus-btn {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.focus-btn:hover {
+  border-color: var(--accent);
+}
+.focus-btn.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.toolbar-hint {
+  color: var(--muted);
+  font-size: 12.5px;
 }
 
 /* ---------- Banners ---------- */
@@ -139,12 +170,11 @@ select {
   border-color: var(--accent);
 }
 
-/* ---------- Board ---------- */
+/* ---------- Board: vertical full-width bands ---------- */
 .board {
-  display: grid;
-  grid-template-columns: 1.45fr 1fr 1fr 1fr;
-  gap: 14px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 .lane {
   background: var(--bg-2);
@@ -152,13 +182,11 @@ select {
   border-radius: var(--radius);
   display: flex;
   flex-direction: column;
-  min-height: 220px;
-  max-height: calc(100vh - 150px);
 }
 .lane-today {
   border-color: var(--accent-dim);
-  background: linear-gradient(180deg, rgba(76, 141, 255, 0.07), rgba(76, 141, 255, 0));
-  box-shadow: inset 0 0 0 1px rgba(76, 141, 255, 0.12);
+  background: linear-gradient(180deg, rgba(76, 141, 255, 0.08), rgba(76, 141, 255, 0));
+  box-shadow: inset 0 0 0 1px rgba(76, 141, 255, 0.14);
 }
 .lane-over {
   border-color: var(--accent);
@@ -167,7 +195,7 @@ select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px 10px;
+  padding: 12px 16px 10px;
   border-bottom: 1px solid var(--border-soft);
 }
 .lane-head h2 {
@@ -180,6 +208,7 @@ select {
 }
 .lane-today .lane-head h2 {
   color: var(--accent);
+  font-size: 14px;
 }
 .lane-head-right {
   display: flex;
@@ -209,25 +238,39 @@ select {
   border-color: var(--accent);
 }
 .lane-body {
-  padding: 10px;
-  overflow-y: auto;
+  padding: 12px;
   display: flex;
-  flex-direction: column;
-  gap: 9px;
-  flex: 1;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-content: flex-start;
+  min-height: 62px;
 }
 .lane-empty {
+  flex: 1;
   border: 1.5px dashed var(--border);
   border-radius: 10px;
-  padding: 16px;
+  padding: 14px;
   text-align: center;
   color: var(--muted);
   font-size: 13px;
 }
 
 /* ---------- Cards ---------- */
+.card-wrap {
+  flex: 1 1 250px;
+  min-width: 230px;
+  max-width: 340px;
+}
+.lane-today .card-wrap {
+  flex-basis: 300px;
+  min-width: 280px;
+  max-width: 440px;
+}
 .card {
   position: relative;
+  width: 100%;
+  height: 100%;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -282,7 +325,7 @@ select {
   padding: 14px 15px 14px 18px;
 }
 .lane-today .card-title {
-  font-size: 16px;
+  font-size: 16.5px;
   font-weight: 700;
 }
 .card-meta {
@@ -313,12 +356,16 @@ select {
   color: #a8b1bd;
 }
 
+.add-card {
+  flex: 1 1 250px;
+  min-width: 230px;
+}
 .add-card input {
   width: 100%;
   background: var(--panel);
   border: 1px solid var(--accent);
   border-radius: 9px;
-  padding: 10px 12px;
+  padding: 12px;
   font-size: 14px;
   outline: none;
 }
@@ -492,6 +539,7 @@ select {
 .notes-view {
   font-size: 14.5px;
   line-height: 1.65;
+  word-wrap: break-word;
 }
 .notes-view h1,
 .notes-view h2,
@@ -743,22 +791,19 @@ input[type="checkbox"] {
     padding: 14px 14px 50px;
   }
   .board {
-    grid-template-columns: 1fr;
     gap: 12px;
   }
-  .lane {
-    max-height: none;
-  }
-  .lane-today {
-    order: -1;
+  .card-wrap,
+  .lane-today .card-wrap,
+  .add-card {
+    flex-basis: 100%;
+    min-width: 0;
+    max-width: none;
   }
   .detail-grid {
     grid-template-columns: 1fr;
   }
   .detail-title {
     font-size: 23px;
-  }
-  .lane-body {
-    max-height: 60vh;
   }
 }

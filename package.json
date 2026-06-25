@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -p 3000",
     "setup:airtable": "node scripts/setup-airtable.mjs",
-    "seed:airtable": "node scripts/seed-airtable.mjs"
+    "seed:airtable": "node scripts/seed-airtable.mjs",
+    "import:repos": "node scripts/import-repos.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",

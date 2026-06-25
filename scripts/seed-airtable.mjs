@@ -5,19 +5,21 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 function loadEnv() {
-  const path = resolve(process.cwd(), ".env");
-  if (!existsSync(path)) return;
-  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+  for (const file of [".env.local", ".env"]) {
+    const path = resolve(process.cwd(), file);
+    if (!existsSync(path)) continue;
+    for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+    }
   }
 }
 loadEnv();
 
 const KEY = process.env.AIRTABLE_API_KEY;
-const BASE = process.env.AIRTABLE_BASE_ID;
+const BASE = (process.env.AIRTABLE_BASE_ID || "").trim().split("/")[0];
 if (!KEY || !BASE) {
-  console.error("✗ Set AIRTABLE_API_KEY and AIRTABLE_BASE_ID in .env first.");
+  console.error("✗ Set AIRTABLE_API_KEY and AIRTABLE_BASE_ID in .env.local first.");
   process.exit(1);
 }
 const H = { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
@@ -35,10 +37,10 @@ async function post(table, records) {
 
 (async () => {
   await post(process.env.AIRTABLE_SETTINGS_TABLE || "Settings", [
-    { fields: { Name: "global", SnoozeDays: 7, WarmAfterDays: 3, StaleAfterDays: 7, WipLimit: 4 } },
+    { fields: { Name: "global", SnoozeDays: 7, WarmAfterDays: 3, StaleAfterDays: 7, WipLimit: 3 } },
   ]);
   await post(process.env.AIRTABLE_PROJECTS_TABLE || "Projects", [
-    { fields: { Name: "Command Board (this app)", Lane: "Today", Position: 0, Notes: "Ship v1.", Repos: "youruser/command-board", LastTouched: iso(0), CreatedAt: iso(5), Archived: false } },
+    { fields: { Name: "Command Board (this app)", Lane: "Now", Position: 0, Notes: "Ship v1.", Repos: "luminagency-cloud/DMdash", LastTouched: iso(0), CreatedAt: iso(5), Archived: false } },
     { fields: { Name: "Clean the backyard", Lane: "Next", Position: 0, Notes: "No repo — local to-dos only.", LastTouched: iso(2), CreatedAt: iso(4), Archived: false } },
     { fields: { Name: "Tax docs", Lane: "Unlabeled", Position: 0, LastTouched: iso(9), CreatedAt: iso(9), Archived: false } },
   ]);

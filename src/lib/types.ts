@@ -4,8 +4,9 @@ export type Lane = "today" | "next" | "unlabeled" | "snooze";
 
 export const LANES: Lane[] = ["today", "next", "unlabeled", "snooze"];
 
+// "today" is the top, most-important band — shown to the user as "Now".
 export const LANE_LABELS: Record<Lane, string> = {
-  today: "Today",
+  today: "Now",
   next: "Next",
   unlabeled: "Unlabeled",
   snooze: "Snooze",
@@ -15,7 +16,7 @@ export interface Project {
   id: string;
   name: string;
   lane: Lane;
-  position: number; // ordering within a lane (ascending)
+  position: number; // ordering within a lane (ascending = higher priority)
   notes: string; // markdown
   repos: string[]; // "owner/repo" entries; a project may link several
   lastTouched: string; // ISO timestamp
@@ -37,14 +38,14 @@ export interface Settings {
   snoozeDays: number; // default 7
   warmAfterDays: number; // card turns "warm" after this many untouched days
   staleAfterDays: number; // card turns "stale" after this many untouched days
-  wipLimit: number | null; // max cards in Today before a warning; null = off
+  wipLimit: number | null; // max cards in Now before a warning; null = off
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   snoozeDays: 7,
   warmAfterDays: 3,
   staleAfterDays: 7,
-  wipLimit: 4,
+  wipLimit: 3,
 };
 
 export type AgingStage = "fresh" | "warm" | "stale" | "snoozed";

@@ -1,24 +1,27 @@
 #!/usr/bin/env node
 // Creates the Command Board schema in your Airtable base (idempotent).
-// Run: npm run setup:airtable   (after filling .env)
+// Run: npm run setup:airtable   (reads .env.local, then .env)
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-// --- minimal .env loader (so the script works without extra deps) ---
+// --- minimal env loader: .env.local wins, .env is a fallback ---
 function loadEnv() {
-  const path = resolve(process.cwd(), ".env");
-  if (!existsSync(path)) return;
-  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+  for (const file of [".env.local", ".env"]) {
+    const path = resolve(process.cwd(), file);
+    if (!existsSync(path)) continue;
+    for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+    }
   }
 }
 loadEnv();
 
 const KEY = process.env.AIRTABLE_API_KEY;
-const BASE = process.env.AIRTABLE_BASE_ID;
+// Accept a base ID pasted from an Airtable URL (app.../tbl.../viw...) — keep only app… part.
+const BASE = (process.env.AIRTABLE_BASE_ID || "").trim().split("/")[0];
 if (!KEY || !BASE) {
-  console.error("✗ Set AIRTABLE_API_KEY and AIRTABLE_BASE_ID in .env first.");
+  console.error("✗ Set AIRTABLE_API_KEY and AIRTABLE_BASE_ID in .env.local first.");
   process.exit(1);
 }
 
@@ -30,7 +33,7 @@ const TABLES = [
     name: process.env.AIRTABLE_PROJECTS_TABLE || "Projects",
     fields: [
       { name: "Name", type: "singleLineText" },
-      { name: "Lane", type: "singleSelect", options: { choices: [{ name: "Today" }, { name: "Next" }, { name: "Unlabeled" }, { name: "Snooze" }] } },
+      { name: "Lane", type: "singleSelect", options: { choices: [{ name: "Now" }, { name: "Next" }, { name: "Unlabeled" }, { name: "Snooze" }] } },
       { name: "Position", ...num() },
       { name: "Notes", type: "multilineText" },
       { name: "Repos", type: "multilineText" },

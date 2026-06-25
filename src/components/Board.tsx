@@ -19,9 +19,9 @@ import {
 import {
   SortableContext,
   arrayMove,
+  rectSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { api } from "@/lib/client";
@@ -44,17 +44,17 @@ export default function Board() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [addingLane, setAddingLane] = useState<Lane | null>(null);
   const [newName, setNewName] = useState("");
+  const [focus, setFocus] = useState(false);
   const snapshot = useRef<Record<string, { lane: Lane; index: number }>>({});
   const suppressClick = useRef(0);
 
   function openProject(id: string) {
-    // Ignore the click that a browser fires right after a drop.
     if (Date.now() < suppressClick.current) return;
     router.push(`/project/${id}`);
   }
 
-  // Mouse uses a small drag threshold; touch uses a long-press so that
-  // vertical scrolling on the phone still works inside the lanes.
+  // Mouse uses a small drag threshold; touch uses a long-press so vertical
+  // scrolling on the phone still works inside the bands.
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
@@ -129,7 +129,6 @@ export default function Board() {
     setActiveId(null);
     suppressClick.current = Date.now() + 250;
 
-    // Build the final arrangement explicitly so we never read stale state.
     let final = items;
     if (overId) {
       const from = findContainer(activeId);
@@ -166,7 +165,6 @@ export default function Board() {
       snoozeUntil = new Date(Date.now() + settings.snoozeDays * 86400000).toISOString();
     }
 
-    // Optimistic local touch so aging/snooze reflects immediately.
     setById((prev) => {
       const moved = prev[movedId];
       if (!moved) return prev;
@@ -218,8 +216,8 @@ export default function Board() {
     () => Object.values(byId).filter((p) => p.agingStage === "stale"),
     [byId]
   );
-  const wipExceeded =
-    settings?.wipLimit != null && items.today.length > settings.wipLimit;
+  const wipExceeded = !!settings && settings.wipLimit != null && items.today.length > settings.wipLimit;
+  const lanesToShow: Lane[] = focus ? ["today"] : LANES;
 
   if (loading) {
     return <div className="board-status">Loading your board…</div>;
@@ -227,6 +225,13 @@ export default function Board() {
 
   return (
     <>
+      <div className="toolbar">
+        <button className={`focus-btn ${focus ? "on" : ""}`} onClick={() => setFocus((f) => !f)}>
+          {focus ? "← Exit focus" : "◎ Focus"}
+        </button>
+        <span className="toolbar-hint">↑ Up = more important · drag between bands</span>
+      </div>
+
       {error && (
         <div className="banner banner-error" onClick={() => setError(null)}>
           {error} · tap to dismiss
@@ -237,7 +242,7 @@ export default function Board() {
         <div className="banner banner-attention">
           {wipExceeded && (
             <span className="banner-chip wip">
-              {items.today.length} in Today — over your limit of {settings?.wipLimit}. Pick fewer.
+              {items.today.length} in Now — over your limit of {settings?.wipLimit}. Pick fewer.
             </span>
           )}
           {staleList.length > 0 && (
@@ -261,7 +266,7 @@ export default function Board() {
         onDragEnd={onDragEnd}
       >
         <div className="board">
-          {LANES.map((lane) => (
+          {lanesToShow.map((lane) => (
             <LaneColumn
               key={lane}
               lane={lane}
@@ -283,9 +288,7 @@ export default function Board() {
         </div>
 
         <DragOverlay>
-          {activeId && byId[activeId] ? (
-            <Card project={byId[activeId]} dragging onOpen={() => {}} />
-          ) : null}
+          {activeId && byId[activeId] ? <Card project={byId[activeId]} dragging onOpen={() => {}} /> : null}
         </DragOverlay>
       </DndContext>
 
@@ -338,7 +341,7 @@ function LaneColumn({
       </header>
 
       <div ref={setNodeRef} className="lane-body">
-        <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+        <SortableContext items={itemIds} strategy={rectSortingStrategy}>
           {itemIds.map((id) => (
             <SortableCard key={id} id={id} project={byId[id]} onOpen={onOpen} />
           ))}
@@ -382,7 +385,7 @@ function SortableCard({
     opacity: isDragging ? 0.4 : 1,
   };
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="card-wrap">
       <Card project={project} onOpen={onOpen} />
     </div>
   );

@@ -9,8 +9,14 @@ const T = {
   settings: process.env.AIRTABLE_SETTINGS_TABLE || "Settings",
 };
 
+// Tolerate a base ID pasted straight from an Airtable URL (app.../tbl.../viw...);
+// only the leading app… id is valid for the REST API.
+function baseId(): string {
+  return (process.env.AIRTABLE_BASE_ID || "").trim().split("/")[0];
+}
+
 function baseUrl(table: string): string {
-  return `${API}/${process.env.AIRTABLE_BASE_ID}/${encodeURIComponent(table)}`;
+  return `${API}/${baseId()}/${encodeURIComponent(table)}`;
 }
 
 function headers() {
@@ -34,7 +40,7 @@ async function at(url: string, init?: RequestInit) {
 }
 
 const LANE_TO_LABEL: Record<Lane, string> = {
-  today: "Today",
+  today: "Now",
   next: "Next",
   unlabeled: "Unlabeled",
   snooze: "Snooze",
@@ -42,6 +48,7 @@ const LANE_TO_LABEL: Record<Lane, string> = {
 
 function labelToLane(label: string | undefined): Lane {
   switch ((label || "").toLowerCase()) {
+    case "now":
     case "today":
       return "today";
     case "next":
