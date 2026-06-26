@@ -140,7 +140,7 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
   }
 
   async function deleteTask(id: string) {
-    await api(`/api/tasks/${id}`, { method: "DELETE" });
+    await api(`/api/tasks/${id}?projectId=${projectId}`, { method: "DELETE" });
     setTasks((list) => list.filter((t) => t.id !== id));
   }
 

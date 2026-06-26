@@ -23,5 +23,7 @@ export async function POST(req: NextRequest) {
   }
   const ds = await getDataSource();
   const task = await ds.createTask({ projectId: body.projectId, title: String(body.title).trim() });
+  // Editing a project's to-dos is real work → touch it.
+  await ds.updateProject(body.projectId, { lastTouched: new Date().toISOString() });
   return NextResponse.json({ task });
 }

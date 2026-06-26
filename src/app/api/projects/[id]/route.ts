@@ -9,15 +9,14 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: { id: string } };
 
-// GET a single project. Opening it counts as "touching" it, which resets aging.
+// Opening a project is a *look*, not a *touch* — do NOT bump lastTouched here.
 export async function GET(_req: NextRequest, { params }: Params) {
   if (!apiAuthed()) return unauthorized();
   const ds = await getDataSource();
   const existing = await ds.getProject(params.id);
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const touched = await ds.updateProject(params.id, { lastTouched: new Date().toISOString() });
   const settings = await ds.getSettings();
-  return NextResponse.json({ project: toProjectView(touched, settings) });
+  return NextResponse.json({ project: toProjectView(existing, settings) });
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -34,8 +33,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     patch.snoozeUntil = body.snoozeUntil;
   }
 
-  // Editing or moving a card counts as touching it, unless the caller opts out
-  // (e.g. a bulk reorder of cards the user did not actually open).
+  // Editing content (notes, name) is a touch. Callers pass touch:false for
+  // organizing actions (lane, snooze, repos) so those don't reset aging.
   if (body.touch !== false) patch.lastTouched = new Date().toISOString();
 
   const ds = await getDataSource();
@@ -44,7 +43,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   return NextResponse.json({ project: toProjectView(updated, settings) });
 }
 
-// Default DELETE archives (soft). Pass ?hard=1 to permanently remove.
 export async function DELETE(req: NextRequest, { params }: Params) {
   if (!apiAuthed()) return unauthorized();
   const ds = await getDataSource();
