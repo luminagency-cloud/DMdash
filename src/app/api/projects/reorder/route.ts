@@ -6,9 +6,9 @@ import { Lane } from "@/lib/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Persist a drag-and-drop result. The client sends only the cards whose lane or
-// position changed. Only the card the user actually dragged (movedId) gets its
-// lastTouched bumped — reordering neighbours should not reset their aging.
+// Persist a drag/promote result. The client sends only the cards whose lane or
+// position changed. Moving a card is *organizing*, not *working*, so we never
+// bump lastTouched here — aging should reflect real engagement, not shuffling.
 export async function POST(req: NextRequest) {
   if (!apiAuthed()) return unauthorized();
   const body = await req.json().catch(() => ({}));
@@ -21,7 +21,6 @@ export async function POST(req: NextRequest) {
     items.map((it) => {
       const patch: any = { lane: it.lane, position: it.position };
       if (it.id === movedId) {
-        patch.lastTouched = new Date().toISOString();
         // Dragging into Snooze sets the snooze window; dragging out clears it.
         if (it.lane === "snooze" && snoozeUntil) patch.snoozeUntil = snoozeUntil;
         if (it.lane !== "snooze") patch.snoozeUntil = null;

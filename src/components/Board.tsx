@@ -104,15 +104,18 @@ export default function Board() {
     return LANES.find((l) => items[l].includes(id));
   }
 
-  function onDragStart(e: DragStartEvent) {
+  function snapshotNow() {
     const snap: Record<string, { lane: Lane; index: number }> = {};
     for (const l of LANES) items[l].forEach((id, index) => (snap[id] = { lane: l, index }));
     snapshot.current = snap;
+  }
+
+  function onDragStart(e: DragStartEvent) {
+    snapshotNow();
     setActiveId(String(e.active.id));
   }
 
-  // Cross-lane and within-lane moves are resolved once, on drop — no setState
-  // during the drag, which is what caused the update-depth loop.
+  // Resolve the move once, on drop — no setState during the drag.
   function onDragEnd(e: DragEndEvent) {
     const activeId = String(e.active.id);
     const overId = e.over ? String(e.over.id) : null;
@@ -134,7 +137,7 @@ export default function Board() {
     } else {
       const fromArr = items[from].filter((x) => x !== activeId);
       const toArr = [...items[to]];
-      const overIdx = toArr.indexOf(overId); // -1 when dropping on an empty lane
+      const overIdx = toArr.indexOf(overId);
       toArr.splice(overIdx >= 0 ? overIdx : toArr.length, 0, activeId);
       final = { ...items, [from]: fromArr, [to]: toArr };
     }
@@ -142,24 +145,24 @@ export default function Board() {
     persist(activeId, final);
   }
 
-  // Promote (up = more important) / demote (down) by one band — the reliable,
-  // touch-friendly way to move a card, no dragging needed.
   function moveLane(id: string, dir: "up" | "down") {
     const cur = findContainer(id);
     if (!cur) return;
     const target = LANES[LANES.indexOf(cur) + (dir === "up" ? -1 : 1)];
     if (!target) return;
+    snapshotNow();
     const final: ItemMap = {
       ...items,
       [cur]: items[cur].filter((x) => x !== id),
       [target]: [...items[target], id],
     };
-    snapshot.current = {};
-    for (const l of LANES) items[l].forEach((x, index) => (snapshot.current[x] = { lane: l, index }));
     setItems(final);
     persist(id, final);
   }
 
+  // Moving / reordering is organizing, NOT working — so it must not bump
+  // lastTouched. We persist lane + position (and snooze) and reconcile aging
+  // from the server, which leaves lastTouched alone for moves.
   async function persist(movedId: string, map: ItemMap) {
     if (!settings) return;
     const changed: { id: string; lane: Lane; position: number }[] = [];
@@ -174,23 +177,20 @@ export default function Board() {
     if (changed.length === 0) return;
 
     const movedTo = LANES.find((l) => map[l].includes(movedId));
-    let snoozeUntil: string | null = null;
-    if (movedTo === "snooze") {
-      snoozeUntil = new Date(Date.now() + settings.snoozeDays * 86400000).toISOString();
-    }
+    const toSnooze = movedTo === "snooze";
+    const snoozeUntil = toSnooze ? new Date(Date.now() + settings.snoozeDays * 86400000).toISOString() : null;
 
+    // Optimistic: only the lane (and snooze) change — aging is left as-is.
     setById((prev) => {
-      const moved = prev[movedId];
-      if (!moved) return prev;
+      const m = prev[movedId];
+      if (!m) return prev;
       return {
         ...prev,
         [movedId]: {
-          ...moved,
-          lane: movedTo || moved.lane,
-          lastTouched: new Date().toISOString(),
-          daysUntouched: 0,
-          snoozeUntil: movedTo === "snooze" ? snoozeUntil : null,
-          agingStage: movedTo === "snooze" ? "snoozed" : "fresh",
+          ...m,
+          lane: movedTo || m.lane,
+          snoozeUntil: toSnooze ? snoozeUntil : null,
+          agingStage: toSnooze ? "snoozed" : m.agingStage,
           woke: false,
         },
       };
@@ -201,8 +201,27 @@ export default function Board() {
         method: "POST",
         body: JSON.stringify({ movedId, items: changed, snoozeUntil }),
       });
+      await load(); // reconcile order + aging from the server
     } catch (e: any) {
       setError(e.message || "Save failed");
+      load();
+    }
+  }
+
+  async function deleteProject(id: string) {
+    const name = byId[id]?.name || "this project";
+    if (!confirm(`Delete "${name}"? This removes it for good — there's no undo.`)) return;
+    const cur = findContainer(id);
+    setItems((prev) => (cur ? { ...prev, [cur]: prev[cur].filter((x) => x !== id) } : prev));
+    setById((prev) => {
+      const c = { ...prev };
+      delete c[id];
+      return c;
+    });
+    try {
+      await api(`/api/projects/${id}?hard=1`, { method: "DELETE" });
+    } catch (e: any) {
+      setError(e.message || "Delete failed");
       load();
     }
   }
@@ -218,7 +237,7 @@ export default function Board() {
         method: "POST",
         body: JSON.stringify({ name, lane }),
       });
-      await load(); // re-pull so the new card is guaranteed on screen
+      await load();
     } catch (e: any) {
       setError(e.message || "Could not add");
     } finally {
@@ -241,7 +260,7 @@ export default function Board() {
         <button className={`focus-btn ${focus ? "on" : ""}`} onClick={() => setFocus((f) => !f)}>
           {focus ? "← Exit focus" : "◎ Focus"}
         </button>
-        <span className="toolbar-hint">↑ Up = more important · drag or use the ▲▼ on a card</span>
+        <span className="toolbar-hint">↑ Up = more important · ▲▼ promote/demote · ✕ delete</span>
       </div>
 
       {error && (
@@ -294,13 +313,16 @@ export default function Board() {
               onCancelAdd={() => setAddingLane(null)}
               onOpen={openProject}
               onMove={moveLane}
+              onDelete={deleteProject}
               wipLimit={lane === "today" ? settings?.wipLimit ?? null : null}
             />
           ))}
         </div>
 
         <DragOverlay>
-          {activeId && byId[activeId] ? <Card project={byId[activeId]} dragging onOpen={() => {}} onMove={() => {}} /> : null}
+          {activeId && byId[activeId] ? (
+            <Card project={byId[activeId]} dragging onOpen={() => {}} onMove={() => {}} onDelete={() => {}} />
+          ) : null}
         </DragOverlay>
       </DndContext>
 
@@ -323,6 +345,7 @@ function LaneColumn({
   onCancelAdd,
   onOpen,
   onMove,
+  onDelete,
   wipLimit,
 }: {
   lane: Lane;
@@ -336,6 +359,7 @@ function LaneColumn({
   onCancelAdd: () => void;
   onOpen: (id: string) => void;
   onMove: (id: string, dir: "up" | "down") => void;
+  onDelete: (id: string) => void;
   wipLimit: number | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: lane });
@@ -357,7 +381,7 @@ function LaneColumn({
       <div ref={setNodeRef} className="lane-body">
         <SortableContext items={itemIds} strategy={rectSortingStrategy}>
           {itemIds.map((id) => (
-            <SortableCard key={id} id={id} project={byId[id]} onOpen={onOpen} onMove={onMove} />
+            <SortableCard key={id} id={id} project={byId[id]} onOpen={onOpen} onMove={onMove} onDelete={onDelete} />
           ))}
         </SortableContext>
 
@@ -388,11 +412,13 @@ function SortableCard({
   project,
   onOpen,
   onMove,
+  onDelete,
 }: {
   id: string;
   project: ProjectView;
   onOpen: (id: string) => void;
   onMove: (id: string, dir: "up" | "down") => void;
+  onDelete: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
@@ -402,7 +428,7 @@ function SortableCard({
   };
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="card-wrap">
-      <Card project={project} onOpen={onOpen} onMove={onMove} />
+      <Card project={project} onOpen={onOpen} onMove={onMove} onDelete={onDelete} />
     </div>
   );
 }
@@ -411,11 +437,13 @@ function Card({
   project,
   onOpen,
   onMove,
+  onDelete,
   dragging,
 }: {
   project: ProjectView;
   onOpen: (id: string) => void;
   onMove: (id: string, dir: "up" | "down") => void;
+  onDelete: (id: string) => void;
   dragging?: boolean;
 }) {
   const wake =
@@ -424,8 +452,6 @@ function Card({
       : null;
   const atTop = project.lane === LANES[0];
   const atBottom = project.lane === LANES[LANES.length - 1];
-
-  // Buttons stop pointer/click propagation so they neither start a drag nor open the card.
   const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
   return (
@@ -437,27 +463,14 @@ function Card({
       <div className="card-strip" />
       {!dragging && (
         <div className="card-move" onPointerDown={stop}>
-          <button
-            aria-label="Promote"
-            disabled={atTop}
-            onPointerDown={stop}
-            onClick={(e) => {
-              stop(e);
-              onMove(project.id, "up");
-            }}
-          >
+          <button aria-label="Promote" disabled={atTop} onPointerDown={stop} onClick={(e) => { stop(e); onMove(project.id, "up"); }}>
             ▲
           </button>
-          <button
-            aria-label="Demote"
-            disabled={atBottom}
-            onPointerDown={stop}
-            onClick={(e) => {
-              stop(e);
-              onMove(project.id, "down");
-            }}
-          >
+          <button aria-label="Demote" disabled={atBottom} onPointerDown={stop} onClick={(e) => { stop(e); onMove(project.id, "down"); }}>
             ▼
+          </button>
+          <button className="card-del" aria-label="Delete" onPointerDown={stop} onClick={(e) => { stop(e); onDelete(project.id); }}>
+            ✕
           </button>
         </div>
       )}

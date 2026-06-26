@@ -387,6 +387,10 @@ select {
   opacity: 0.3;
   cursor: default;
 }
+.card-move .card-del:hover {
+  color: #ff8c84;
+  border-color: var(--stale);
+}
 
 .add-card {
   min-width: 0;
