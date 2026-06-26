@@ -259,6 +259,7 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
             <RepoSection
               key={repo}
               repo={repo}
+              projectId={projectId}
               state={repoState[repo]}
               onRemove={() => removeRepo(repo)}
               onReload={() => loadIssues(repo)}
@@ -292,12 +293,14 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
 
 function RepoSection({
   repo,
+  projectId,
   state,
   onRemove,
   onReload,
   onMutate,
 }: {
   repo: string;
+  projectId: string;
   state: RepoState | undefined;
   onRemove: () => void;
   onReload: () => void;
@@ -312,7 +315,7 @@ function RepoSection({
     if (!title.trim()) return;
     setCreating(true);
     try {
-      await api("/api/github/issues", { method: "POST", body: JSON.stringify({ repo, title: title.trim() }) });
+      await api("/api/github/issues", { method: "POST", body: JSON.stringify({ repo, title: title.trim(), projectId }) });
       setTitle("");
       onMutate();
     } finally {
@@ -323,7 +326,7 @@ function RepoSection({
   async function closeIssue(num: number) {
     await api("/api/github/issues", {
       method: "PATCH",
-      body: JSON.stringify({ repo, number: num, action: "close" }),
+      body: JSON.stringify({ repo, number: num, action: "close", projectId }),
     });
     onMutate();
   }
@@ -332,7 +335,7 @@ function RepoSection({
     if (!comment.trim()) return;
     await api("/api/github/issues", {
       method: "PATCH",
-      body: JSON.stringify({ repo, number: num, action: "comment", body: comment.trim() }),
+      body: JSON.stringify({ repo, number: num, action: "comment", body: comment.trim(), projectId }),
     });
     setComment("");
     setCommentFor(null);
