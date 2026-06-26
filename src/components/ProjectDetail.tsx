@@ -73,19 +73,23 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
 
   async function saveNotes() {
     setNotesEditing(false);
-    if (project && notesDraft !== project.notes) await patchProject({ notes: notesDraft });
+    if (project && notesDraft !== project.notes) await patchProject({ notes: notesDraft }); // editing notes is real work → touch
   }
 
+  // Changing lane / snoozing is organizing, not working → touch = false.
   async function changeLane(lane: Lane) {
-    await patchProject({ lane, snoozeUntil: lane === "snooze" && settings ? new Date(Date.now() + settings.snoozeDays * 86400000).toISOString() : null });
+    await patchProject(
+      { lane, snoozeUntil: lane === "snooze" && settings ? new Date(Date.now() + settings.snoozeDays * 86400000).toISOString() : null },
+      false
+    );
   }
 
   async function snooze() {
     if (!settings) return;
-    await patchProject({
-      lane: "snooze",
-      snoozeUntil: new Date(Date.now() + settings.snoozeDays * 86400000).toISOString(),
-    });
+    await patchProject(
+      { lane: "snooze", snoozeUntil: new Date(Date.now() + settings.snoozeDays * 86400000).toISOString() },
+      false
+    );
   }
 
   async function addRepo() {
@@ -99,8 +103,7 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
       setNewRepo("");
       return;
     }
-    const repos = [...project.repos, repo];
-    await patchProject({ repos }, false);
+    await patchProject({ repos: [...project.repos, repo] }, false);
     setNewRepo("");
     loadIssues(repo);
   }
@@ -124,7 +127,6 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
     });
     setTasks((t) => [...t, task]);
     setNewTask("");
-    // Reconcile with the server so the new to-do is guaranteed on screen.
     const fresh = await api<{ tasks: Task[] }>(`/api/tasks?projectId=${projectId}`);
     setTasks(fresh.tasks);
   }
@@ -158,11 +160,7 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
           ← Board
         </button>
         <div className="detail-actions">
-          <select
-            className="lane-select"
-            value={project.lane}
-            onChange={(e) => changeLane(e.target.value as Lane)}
-          >
+          <select className="lane-select" value={project.lane} onChange={(e) => changeLane(e.target.value as Lane)}>
             {LANES.map((l) => (
               <option key={l} value={l}>
                 {LANE_LABELS[l]}
@@ -184,7 +182,7 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
         className="detail-title"
         value={project.name}
         onChange={(e) => setProject({ ...project, name: e.target.value })}
-        onBlur={() => patchProject({ name: project.name }, false)}
+        onBlur={() => patchProject({ name: project.name })}
       />
       <div className={`detail-aging age-${project.agingStage}`}>
         {project.agingStage === "snoozed"
@@ -195,6 +193,7 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
       </div>
 
       <div className="detail-grid">
+        {/* Left: notes */}
         <section className="panel">
           <div className="panel-head">
             <h2>Notes</h2>
@@ -222,70 +221,71 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
           )}
         </section>
 
-        <section className="panel">
-          <div className="panel-head">
-            <h2>To-dos</h2>
-            <span className="muted">{tasks.filter((t) => !t.done).length} open</span>
-          </div>
-          <div className="task-add">
-            <input
-              value={newTask}
-              placeholder="Add a to-do…"
-              onChange={(e) => setNewTask(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addTask()}
+        {/* Right: to-dos on top, then one issues block per linked repo, then repo linker */}
+        <div className="detail-right">
+          <section className="panel">
+            <div className="panel-head">
+              <h2>To-dos</h2>
+              <span className="muted">{tasks.filter((t) => !t.done).length} open</span>
+            </div>
+            <div className="task-add">
+              <input
+                value={newTask}
+                placeholder="Add a to-do…"
+                onChange={(e) => setNewTask(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addTask()}
+              />
+              <button className="btn" onClick={addTask}>
+                Add
+              </button>
+            </div>
+            <ul className="task-list">
+              {tasks.map((t) => (
+                <li key={t.id} className={t.done ? "done" : ""}>
+                  <label>
+                    <input type="checkbox" checked={t.done} onChange={() => toggleTask(t)} />
+                    <span>{t.title}</span>
+                  </label>
+                  <button className="task-del" onClick={() => deleteTask(t.id)} aria-label="delete">
+                    ×
+                  </button>
+                </li>
+              ))}
+              {tasks.length === 0 && <li className="muted">No to-dos yet.</li>}
+            </ul>
+          </section>
+
+          {project.repos.map((repo) => (
+            <RepoSection
+              key={repo}
+              repo={repo}
+              state={repoState[repo]}
+              onRemove={() => removeRepo(repo)}
+              onReload={() => loadIssues(repo)}
+              onMutate={() => loadIssues(repo)}
             />
-            <button className="btn" onClick={addTask}>
-              Add
-            </button>
-          </div>
-          <ul className="task-list">
-            {tasks.map((t) => (
-              <li key={t.id} className={t.done ? "done" : ""}>
-                <label>
-                  <input type="checkbox" checked={t.done} onChange={() => toggleTask(t)} />
-                  <span>{t.title}</span>
-                </label>
-                <button className="task-del" onClick={() => deleteTask(t.id)} aria-label="delete">
-                  ×
-                </button>
-              </li>
-            ))}
-            {tasks.length === 0 && <li className="muted">No to-dos. Great for repo-less projects.</li>}
-          </ul>
-        </section>
+          ))}
+
+          <section className="panel">
+            <div className="repo-add">
+              <input
+                value={newRepo}
+                placeholder="Link a repo (owner/repo)"
+                onChange={(e) => setNewRepo(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addRepo()}
+              />
+              <button className="btn" onClick={addRepo}>
+                Link
+              </button>
+            </div>
+            {project.repos.length === 0 && (
+              <p className="muted" style={{ margin: 0 }}>
+                No repos linked. Link one to pull its GitHub issues here.
+              </p>
+            )}
+          </section>
+        </div>
       </div>
-
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Linked repos &amp; issues</h2>
-        </div>
-        <div className="repo-add">
-          <input
-            value={newRepo}
-            placeholder="owner/repo"
-            onChange={(e) => setNewRepo(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addRepo()}
-          />
-          <button className="btn" onClick={addRepo}>
-            Link repo
-          </button>
-        </div>
-
-        {project.repos.length === 0 && (
-          <p className="muted">No repos linked. Link one or more to pull GitHub issues here.</p>
-        )}
-
-        {project.repos.map((repo) => (
-          <RepoSection
-            key={repo}
-            repo={repo}
-            state={repoState[repo]}
-            onRemove={() => removeRepo(repo)}
-            onReload={() => loadIssues(repo)}
-            onMutate={() => loadIssues(repo)}
-          />
-        ))}
-      </section>
     </div>
   );
 }
@@ -312,10 +312,7 @@ function RepoSection({
     if (!title.trim()) return;
     setCreating(true);
     try {
-      await api("/api/github/issues", {
-        method: "POST",
-        body: JSON.stringify({ repo, title: title.trim() }),
-      });
+      await api("/api/github/issues", { method: "POST", body: JSON.stringify({ repo, title: title.trim() }) });
       setTitle("");
       onMutate();
     } finally {
@@ -342,11 +339,14 @@ function RepoSection({
   }
 
   return (
-    <div className="repo-block">
-      <div className="repo-head">
-        <a href={`https://github.com/${repo}`} target="_blank" rel="noopener noreferrer" className="repo-name">
-          ⎇ {repo}
-        </a>
+    <section className="panel">
+      <div className="panel-head">
+        <h2>
+          Issues ·{" "}
+          <a href={`https://github.com/${repo}`} target="_blank" rel="noopener noreferrer" className="repo-name">
+            {repo}
+          </a>
+        </h2>
         <div>
           <button className="btn-ghost" onClick={onReload}>
             Refresh
@@ -360,7 +360,7 @@ function RepoSection({
       {!state || state.loading ? (
         <p className="muted">Loading issues…</p>
       ) : !state.enabled ? (
-        <p className="muted">Set GITHUB_TOKEN in your env to pull and manage issues.</p>
+        <p className="muted">Set GITHUB_TOKEN in .env.local to pull and manage issues.</p>
       ) : state.error ? (
         <p className="muted error">{state.error}</p>
       ) : (
@@ -373,19 +373,14 @@ function RepoSection({
               onKeyDown={(e) => e.key === "Enter" && createIssue()}
             />
             <button className="btn" disabled={creating} onClick={createIssue}>
-              {creating ? "…" : "Create issue"}
+              {creating ? "…" : "Create"}
             </button>
           </div>
           <ul className="issue-list">
             {state.issues.map((i) => (
               <li key={i.number}>
                 <div className="issue-row">
-                  <input
-                    type="checkbox"
-                    title="Close issue"
-                    checked={false}
-                    onChange={() => closeIssue(i.number)}
-                  />
+                  <input type="checkbox" title="Close issue" checked={false} onChange={() => closeIssue(i.number)} />
                   <a href={i.url} target="_blank" rel="noopener noreferrer">
                     #{i.number} {i.title}
                   </a>
@@ -395,11 +390,7 @@ function RepoSection({
                 </div>
                 {commentFor === i.number && (
                   <div className="issue-comment">
-                    <textarea
-                      value={comment}
-                      placeholder="Comment…"
-                      onChange={(e) => setComment(e.target.value)}
-                    />
+                    <textarea value={comment} placeholder="Comment…" onChange={(e) => setComment(e.target.value)} />
                     <button className="btn" onClick={() => sendComment(i.number)}>
                       Send
                     </button>
@@ -411,6 +402,6 @@ function RepoSection({
           </ul>
         </>
       )}
-    </div>
+    </section>
   );
 }

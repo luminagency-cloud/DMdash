@@ -531,6 +531,12 @@ select {
   grid-template-columns: 1fr 1fr;
   gap: 16px;
   margin-bottom: 16px;
+  align-items: start;
+}
+.detail-right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 .panel {
   background: var(--bg-2);
