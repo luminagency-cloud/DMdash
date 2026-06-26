@@ -150,6 +150,12 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
     router.push("/");
   }
 
+  async function removeProject() {
+    if (!confirm(`Delete "${project?.name || "this project"}"? This removes it for good — there's no undo.`)) return;
+    await api(`/api/projects/${projectId}?hard=1`, { method: "DELETE" });
+    router.push("/");
+  }
+
   if (error) return <div className="board-status error">{error}</div>;
   if (!project) return <div className="board-status">Loading…</div>;
 
@@ -172,8 +178,11 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
               Snooze {settings ? `${settings.snoozeDays}d` : ""}
             </button>
           )}
-          <button className="btn btn-danger" onClick={archive}>
+          <button className="btn" onClick={archive}>
             Archive
+          </button>
+          <button className="btn btn-danger" onClick={removeProject}>
+            Delete
           </button>
         </div>
       </div>
