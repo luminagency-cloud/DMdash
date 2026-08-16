@@ -3,10 +3,10 @@ import "./globals.css";
 import SwRegister from "@/components/sw-register";
 
 export const metadata: Metadata = {
-  title: "Command Board",
-  description: "Your personal work command board.",
+  title: "Dmdash",
+  description: "One command board for every Trello project.",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Command Board" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Dmdash" },
   icons: { icon: "/icons/icon.svg", apple: "/icons/icon.svg" },
 };
 

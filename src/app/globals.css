@@ -853,3 +853,153 @@ input[type="checkbox"] {
     font-size: 23px;
   }
 }
+
+/* ---------- Trello command board v2 ---------- */
+.command-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-bottom: 14px;
+}
+.command-toolbar select,
+.command-toolbar input {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+}
+.command-toolbar input { flex: 1; min-width: 180px; }
+.command-toolbar select:focus,
+.command-toolbar input:focus { border-color: var(--accent); }
+.sync-time { color: var(--muted); font-size: 12px; margin-left: auto; }
+.workflow-warning {
+  margin-bottom: 12px;
+  padding: 10px 13px;
+  border: 1px solid rgba(210, 153, 34, 0.35);
+  border-radius: 9px;
+  color: var(--warm);
+  font-size: 13px;
+}
+.workflow-warning summary { cursor: pointer; font-weight: 600; }
+.workflow-warning div { margin-top: 6px; color: var(--muted); }
+.trello-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(245px, 1fr));
+  gap: 12px;
+  align-items: start;
+  overflow-x: auto;
+  padding-bottom: 18px;
+}
+.trello-board.completed-board { grid-template-columns: minmax(280px, 620px); }
+.workflow-column {
+  min-width: 245px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.workflow-column.column-over { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-dim); }
+.workflow-column > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.workflow-column > header h2 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.workflow-column > header div { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.workflow-column > header button { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
+.workflow-cards { min-height: 90px; padding: 9px; display: flex; flex-direction: column; gap: 8px; }
+.column-empty { padding: 18px 8px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); text-align: center; font-size: 12px; }
+.work-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px;
+  cursor: grab;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.work-card:hover { border-color: #3a4655; }
+.work-card.dragging { box-shadow: var(--shadow); border-color: var(--accent); width: 290px; }
+.work-card-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 7px; }
+.complete-control { display: flex; align-items: center; }
+.project-pill {
+  display: inline-block;
+  width: max-content;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--accent-dim);
+  background: rgba(76, 141, 255, 0.1);
+  color: #a9c7ff;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.archive-button { border: 0; background: transparent; color: var(--muted); font-size: 17px; cursor: pointer; padding: 0 2px; }
+.archive-button:hover { color: var(--stale); }
+.work-card h3 { margin: 9px 0 5px; font-size: 14px; line-height: 1.35; }
+.work-card p {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0 0 8px;
+  color: #b7c0cc;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.card-labels { display: flex; flex-wrap: wrap; gap: 5px; margin: 7px 0; }
+.card-labels span { border-left: 4px solid; background: var(--panel-2); border-radius: 4px; padding: 2px 6px; color: var(--muted); font-size: 10px; }
+.work-card-meta { display: flex; flex-wrap: wrap; gap: 7px; color: var(--muted); font-size: 10.5px; }
+.work-card-meta .warm { color: var(--warm); }
+.work-card-meta .stale,
+.work-card-meta .overdue { color: #ff8c84; }
+.mobile-stage-tabs { display: none; }
+.dialog-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 18px; background: rgba(0, 0, 0, 0.72); }
+.card-dialog { width: min(620px, 100%); max-height: calc(100vh - 36px); overflow-y: auto; background: var(--bg-2); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 18px; }
+.card-dialog > header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.card-dialog > header h2 { margin: 0; font-size: 19px; }
+.card-dialog > header button { border: 0; background: transparent; color: var(--muted); font-size: 26px; cursor: pointer; }
+.card-dialog label { display: flex; flex-direction: column; gap: 6px; margin: 14px 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+.card-dialog input,
+.card-dialog textarea,
+.card-dialog select { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); padding: 10px; color: var(--text); font-size: 14px; outline: none; }
+.card-dialog input:focus,
+.card-dialog textarea:focus,
+.card-dialog select:focus { border-color: var(--accent); }
+.card-dialog textarea { resize: vertical; line-height: 1.5; }
+.dialog-project { margin-bottom: 4px; }
+.trello-link { color: #a9c7ff; font-size: 12px; text-decoration: none; }
+.card-dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.setting-section { margin-bottom: 14px; }
+.setting-section h2 { margin-top: 0; font-size: 17px; }
+.setting-section code { color: #a9c7ff; }
+.connection-good { color: var(--fresh); }
+.workflow-list { color: var(--text); line-height: 1.8; }
+
+@media (max-width: 860px) {
+  .command-toolbar select,
+  .command-toolbar input { flex: 1 1 calc(50% - 6px); min-width: 0; }
+  .command-toolbar .btn { flex: 1; }
+  .sync-time { width: 100%; text-align: right; }
+  .mobile-stage-tabs { display: flex; gap: 5px; overflow-x: auto; margin-bottom: 10px; padding-bottom: 3px; }
+  .mobile-stage-tabs button { flex: 0 0 auto; background: var(--panel); border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 7px 10px; font-size: 11px; }
+  .mobile-stage-tabs button.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .mobile-stage-tabs span { opacity: 0.75; }
+  .trello-board,
+  .trello-board.completed-board { display: block; overflow: visible; }
+  .workflow-column.mobile-hidden { display: none; }
+  .workflow-column { min-width: 0; width: 100%; }
+  .workflow-cards { min-height: 200px; }
+  .work-card p { -webkit-line-clamp: 4; }
+}

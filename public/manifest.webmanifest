@@ -1,7 +1,7 @@
 {
-  "name": "Command Board",
-  "short_name": "Board",
-  "description": "Your personal work command board.",
+  "name": "Dmdash",
+  "short_name": "Dmdash",
+  "description": "One command board for every Trello project.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
