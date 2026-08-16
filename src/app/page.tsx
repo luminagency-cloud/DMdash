@@ -11,7 +11,7 @@ export default function BoardPage() {
       <header className="app-header">
         <div className="brand">
           <span className="brand-mark">▦</span>
-          <h1>Command Board</h1>
+          <h1>Dmdash</h1>
         </div>
         <nav className="app-nav">
           <Link href="/settings" className="nav-link">

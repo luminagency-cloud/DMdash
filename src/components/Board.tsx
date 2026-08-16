@@ -1,496 +1,191 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import {
-  DndContext,
-  DragOverlay,
-  KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
-  closestCorners,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  rectSortingStrategy,
-  sortableKeyboardCoordinates,
-  useSortable,
-} from "@dnd-kit/sortable";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DndContext, DragOverlay, MouseSensor, TouchSensor, closestCorners, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { api } from "@/lib/client";
-import { LANES, LANE_LABELS, type Lane, type ProjectView, type Settings } from "@/lib/types";
+import { ACTIVE_STAGES, WORKFLOW_LABELS, type CommandBoardPayload, type TrelloBoard, type TrelloWorkCard, type WorkflowStage } from "@/lib/types";
 
-type ItemMap = Record<Lane, string[]>;
+type CardMap = Record<WorkflowStage, TrelloWorkCard[]>;
+const emptyCards = (): CardMap => ({ todo: [], next: [], progress: [], waiting: [], done: [] });
+const ageInDays = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
 
-function emptyMap(): ItemMap {
-  return { today: [], next: [], unlabeled: [], snooze: [] };
+function labelColor(color: string | null) {
+  const colors: Record<string, string> = { red: "#f85149", orange: "#db6d28", yellow: "#d29922", green: "#2ea043", blue: "#4c8dff", purple: "#a371f7", pink: "#db61a2", lime: "#82b440", sky: "#58a6ff", black: "#6e7681" };
+  return colors[color || ""] || "#6e7681";
 }
 
 export default function Board() {
-  const router = useRouter();
-  const [byId, setById] = useState<Record<string, ProjectView>>({});
-  const [items, setItems] = useState<ItemMap>(emptyMap());
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [backend, setBackend] = useState<string>("");
+  const [payload, setPayload] = useState<CommandBoardPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [projectId, setProjectId] = useState("all");
+  const [labelId, setLabelId] = useState("all");
+  const [query, setQuery] = useState("");
+  const [mobileStage, setMobileStage] = useState<WorkflowStage>("next");
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [editing, setEditing] = useState<TrelloWorkCard | null>(null);
+  const [addingStage, setAddingStage] = useState<WorkflowStage | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [addingLane, setAddingLane] = useState<Lane | null>(null);
-  const [newName, setNewName] = useState("");
-  const [focus, setFocus] = useState(false);
-  const snapshot = useRef<Record<string, { lane: Lane; index: number }>>({});
-  const suppressClick = useRef(0);
+  const initialLoad = useRef(true);
+  const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 7 } }), useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }));
 
-  function openProject(id: string) {
-    if (Date.now() < suppressClick.current) return;
-    router.push(`/project/${id}`);
-  }
-
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  async function load() {
+  const load = useCallback(async () => {
     try {
+      if (!initialLoad.current) setRefreshing(true);
+      setPayload(await api<CommandBoardPayload>("/api/trello"));
       setError(null);
-      const data = await api<{ projects: ProjectView[]; settings: Settings; backend: string }>("/api/projects");
-      const map = emptyMap();
-      const dict: Record<string, ProjectView> = {};
-      for (const p of [...data.projects].sort((a, b) => a.position - b.position)) {
-        map[p.lane].push(p.id);
-        dict[p.id] = p;
-      }
-      setItems(map);
-      setById(dict);
-      setSettings(data.settings);
-      setBackend(data.backend);
-    } catch (e: any) {
-      setError(e.message || "Failed to load");
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Could not load Trello");
     } finally {
       setLoading(false);
+      setRefreshing(false);
+      initialLoad.current = false;
     }
-  }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-pull when the tab regains focus / becomes visible, so changes made
-  // elsewhere (Airtable, another device) show without a manual reload.
+  useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    const refresh = () => {
-      if (!document.hidden) load();
-    };
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const refreshIfVisible = () => { if (!document.hidden) void load(); };
+    const interval = window.setInterval(refreshIfVisible, 90_000);
+    window.addEventListener("focus", refreshIfVisible);
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    return () => { window.clearInterval(interval); window.removeEventListener("focus", refreshIfVisible); document.removeEventListener("visibilitychange", refreshIfVisible); };
+  }, [load]);
 
-  function findContainer(id: string): Lane | undefined {
-    if ((LANES as string[]).includes(id)) return id as Lane;
-    return LANES.find((l) => items[l].includes(id));
-  }
+  const labels = useMemo(() => {
+    const map = new Map<string, TrelloWorkCard["labels"][number]>();
+    for (const card of payload?.cards || []) for (const label of card.labels) map.set(label.id, label);
+    return [...map.values()].sort((a, b) => (a.name || a.color || "").localeCompare(b.name || b.color || ""));
+  }, [payload]);
 
-  function snapshotNow() {
-    const snap: Record<string, { lane: Lane; index: number }> = {};
-    for (const l of LANES) items[l].forEach((id, index) => (snap[id] = { lane: l, index }));
-    snapshot.current = snap;
-  }
-
-  function onDragStart(e: DragStartEvent) {
-    snapshotNow();
-    setActiveId(String(e.active.id));
-  }
-
-  // Resolve the move once, on drop — no setState during the drag.
-  function onDragEnd(e: DragEndEvent) {
-    const activeId = String(e.active.id);
-    const overId = e.over ? String(e.over.id) : null;
-    setActiveId(null);
-    suppressClick.current = Date.now() + 250;
-    if (!overId) return;
-
-    const from = findContainer(activeId);
-    const to = findContainer(overId);
-    if (!from || !to) return;
-
-    let final: ItemMap;
-    if (from === to) {
-      const arr = items[from];
-      const oldIndex = arr.indexOf(activeId);
-      const newIndex = arr.indexOf(overId);
-      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
-      final = { ...items, [from]: arrayMove(arr, oldIndex, newIndex) };
-    } else {
-      const fromArr = items[from].filter((x) => x !== activeId);
-      const toArr = [...items[to]];
-      const overIdx = toArr.indexOf(overId);
-      toArr.splice(overIdx >= 0 ? overIdx : toArr.length, 0, activeId);
-      final = { ...items, [from]: fromArr, [to]: toArr };
+  const cards = useMemo(() => {
+    const grouped = emptyCards();
+    const needle = query.trim().toLowerCase();
+    for (const card of payload?.cards || []) {
+      if (projectId !== "all" && card.boardId !== projectId) continue;
+      if (labelId !== "all" && !card.labels.some((label) => label.id === labelId)) continue;
+      if (needle && !`${card.name}\n${card.description}\n${card.boardName}`.toLowerCase().includes(needle)) continue;
+      grouped[card.stage].push(card);
     }
-    setItems(final);
-    persist(activeId, final);
-  }
+    for (const stage of Object.keys(grouped) as WorkflowStage[]) grouped[stage].sort((a, b) => a.position - b.position);
+    return grouped;
+  }, [labelId, payload, projectId, query]);
 
-  function moveLane(id: string, dir: "up" | "down") {
-    const cur = findContainer(id);
-    if (!cur) return;
-    const target = LANES[LANES.indexOf(cur) + (dir === "up" ? -1 : 1)];
-    if (!target) return;
-    snapshotNow();
-    const final: ItemMap = {
-      ...items,
-      [cur]: items[cur].filter((x) => x !== id),
-      [target]: [...items[target], id],
-    };
-    setItems(final);
-    persist(id, final);
-  }
+  const cardById = useMemo(() => new Map((payload?.cards || []).map((card) => [card.id, card])), [payload]);
+  const stages = showCompleted ? ["done" as const] : ACTIVE_STAGES;
 
-  // Moving / reordering is organizing, NOT working — so it must not bump
-  // lastTouched. We persist lane + position (and snooze) and reconcile aging
-  // from the server, which leaves lastTouched alone for moves.
-  async function persist(movedId: string, map: ItemMap) {
-    if (!settings) return;
-    const changed: { id: string; lane: Lane; position: number }[] = [];
-    for (const l of LANES) {
-      map[l].forEach((id, index) => {
-        const snap = snapshot.current[id];
-        if (!snap || snap.lane !== l || snap.index !== index) {
-          changed.push({ id, lane: l, position: index });
-        }
-      });
-    }
-    if (changed.length === 0) return;
-
-    const movedTo = LANES.find((l) => map[l].includes(movedId));
-    const toSnooze = movedTo === "snooze";
-    const snoozeUntil = toSnooze ? new Date(Date.now() + settings.snoozeDays * 86400000).toISOString() : null;
-
-    // Optimistic: only the lane (and snooze) change — aging is left as-is.
-    setById((prev) => {
-      const m = prev[movedId];
-      if (!m) return prev;
-      return {
-        ...prev,
-        [movedId]: {
-          ...m,
-          lane: movedTo || m.lane,
-          snoozeUntil: toSnooze ? snoozeUntil : null,
-          agingStage: toSnooze ? "snoozed" : m.agingStage,
-          woke: false,
-        },
-      };
-    });
-
+  async function moveCard(card: TrelloWorkCard, stage: WorkflowStage) {
+    if (!payload || stage === card.stage) return;
+    const board = payload.boards.find((item) => item.id === card.boardId);
+    const listId = board?.lists[stage];
+    if (!listId) { setError(`${board?.name || card.boardName} does not have a ${WORKFLOW_LABELS[stage]} list.`); return; }
+    setPayload((current) => current ? { ...current, cards: current.cards.map((item) => item.id === card.id ? { ...item, stage, listId } : item) } : current);
     try {
-      await api("/api/projects/reorder", {
-        method: "POST",
-        body: JSON.stringify({ movedId, items: changed, snoozeUntil }),
-      });
-      await load(); // reconcile order + aging from the server
-    } catch (e: any) {
-      setError(e.message || "Save failed");
-      load();
-    }
-  }
-
-  async function deleteProject(id: string) {
-    const name = byId[id]?.name || "this project";
-    if (!confirm(`Delete "${name}"? This removes it for good — there's no undo.`)) return;
-    const cur = findContainer(id);
-    setItems((prev) => (cur ? { ...prev, [cur]: prev[cur].filter((x) => x !== id) } : prev));
-    setById((prev) => {
-      const c = { ...prev };
-      delete c[id];
-      return c;
-    });
-    try {
-      await api(`/api/projects/${id}?hard=1`, { method: "DELETE" });
-    } catch (e: any) {
-      setError(e.message || "Delete failed");
-      load();
-    }
-  }
-
-  async function addProject(lane: Lane) {
-    const name = newName.trim();
-    if (!name) {
-      setAddingLane(null);
-      return;
-    }
-    try {
-      await api<{ project: ProjectView }>("/api/projects", {
-        method: "POST",
-        body: JSON.stringify({ name, lane }),
-      });
+      await api("/api/trello", { method: "PATCH", body: JSON.stringify({ cardId: card.id, listId, position: "top" }) });
       await load();
-    } catch (e: any) {
-      setError(e.message || "Could not add");
-    } finally {
-      setNewName("");
-      setAddingLane(null);
+    } catch (moveError) {
+      setError(moveError instanceof Error ? moveError.message : "Move failed");
+      await load();
     }
   }
 
-  const staleList = useMemo(() => Object.values(byId).filter((p) => p.agingStage === "stale"), [byId]);
-  const wipExceeded = !!settings && settings.wipLimit != null && items.today.length > settings.wipLimit;
-  const lanesToShow: Lane[] = focus ? ["today"] : LANES;
-
-  if (loading) {
-    return <div className="board-status">Loading your board…</div>;
+  function onDragStart(event: DragStartEvent) { setActiveId(String(event.active.id)); }
+  async function reorderCard(card: TrelloWorkCard, overCard: TrelloWorkCard) {
+    if (!payload || card.id === overCard.id || card.boardId !== overCard.boardId || card.stage !== overCard.stage) return;
+    const boardCards = payload.cards.filter((item) => item.boardId === card.boardId && item.stage === card.stage).sort((a, b) => a.position - b.position);
+    const from = boardCards.findIndex((item) => item.id === card.id);
+    const over = boardCards.findIndex((item) => item.id === overCard.id);
+    if (from < 0 || over < 0 || from === over) return;
+    const without = boardCards.filter((item) => item.id !== card.id);
+    const target = without.findIndex((item) => item.id === overCard.id) + (from < over ? 1 : 0);
+    const before = without[target - 1]?.position;
+    const after = without[target]?.position;
+    const position = before === undefined ? Math.max(1, (after || 16384) / 2) : after === undefined ? before + 16384 : (before + after) / 2;
+    setPayload((current) => current ? { ...current, cards: current.cards.map((item) => item.id === card.id ? { ...item, position } : item) } : current);
+    try { await api("/api/trello", { method: "PATCH", body: JSON.stringify({ cardId: card.id, position }) }); await load(); }
+    catch (reorderError) { setError(reorderError instanceof Error ? reorderError.message : "Reorder failed"); await load(); }
+  }
+  function onDragEnd(event: DragEndEvent) {
+    const id = String(event.active.id);
+    const overId = event.over ? String(event.over.id) : null;
+    setActiveId(null);
+    if (!overId) return;
+    const card = cardById.get(id);
+    if (!card) return;
+    const directStage = ACTIVE_STAGES.find((stage) => stage === overId);
+    const overCard = cardById.get(overId);
+    const destination = directStage || overCard?.stage;
+    if (destination === card.stage && overCard) void reorderCard(card, overCard);
+    else if (destination) void moveCard(card, destination);
   }
 
+  async function archiveCard(card: TrelloWorkCard) {
+    if (!confirm(`Archive “${card.name}”? You can restore it in Trello.`)) return;
+    setPayload((current) => current ? { ...current, cards: current.cards.filter((item) => item.id !== card.id) } : current);
+    try { await api(`/api/trello?cardId=${encodeURIComponent(card.id)}`, { method: "DELETE" }); }
+    catch (archiveError) { setError(archiveError instanceof Error ? archiveError.message : "Archive failed"); await load(); }
+  }
+
+  if (loading) return <div className="board-status">Loading Trello…</div>;
   return (
     <>
-      <div className="toolbar">
-        <button className={`focus-btn ${focus ? "on" : ""}`} onClick={() => setFocus((f) => !f)}>
-          {focus ? "← Exit focus" : "◎ Focus"}
-        </button>
-        <span className="toolbar-hint">↑ Up = more important · ▲▼ promote/demote · ✕ delete</span>
+      <div className="command-toolbar">
+        <select value={projectId} onChange={(event) => setProjectId(event.target.value)} aria-label="Filter by project"><option value="all">All projects</option>{(payload?.boards || []).map((board) => <option key={board.id} value={board.id}>{board.name}</option>)}</select>
+        <select value={labelId} onChange={(event) => setLabelId(event.target.value)} aria-label="Filter by label"><option value="all">All labels</option>{labels.map((label) => <option key={label.id} value={label.id}>{label.name || label.color || "Unnamed"}</option>)}</select>
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search cards…" aria-label="Search cards" />
+        <button className="btn" onClick={() => void load()} disabled={refreshing}>{refreshing ? "Refreshing…" : "Refresh"}</button>
+        <button className={`btn ${showCompleted ? "btn-primary" : ""}`} onClick={() => { setShowCompleted((value) => !value); setMobileStage(showCompleted ? "next" : "done"); }}>{showCompleted ? "Active work" : "Completed"}</button>
+        <span className="sync-time">{payload ? `Updated ${new Date(payload.syncedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</span>
       </div>
 
-      {error && (
-        <div className="banner banner-error" onClick={() => setError(null)}>
-          {error} · tap to dismiss
-        </div>
-      )}
+      <div className="mobile-stage-tabs" role="tablist" aria-label="Workflow stage">{stages.map((stage) => <button key={stage} className={mobileStage === stage ? "active" : ""} onClick={() => setMobileStage(stage)}>{WORKFLOW_LABELS[stage]} <span>{cards[stage].length}</span></button>)}</div>
+      {error ? <div className="banner banner-error" onClick={() => setError(null)}>{error} · tap to dismiss</div> : null}
+      {(payload?.missingWorkflow.length || 0) > 0 ? <details className="workflow-warning"><summary>{payload?.missingWorkflow.length} project board(s) need standard workflow lists</summary>{payload?.missingWorkflow.map((item) => <div key={item.boardId}>{item.boardName}: {item.missing.map((stage) => WORKFLOW_LABELS[stage]).join(", ")}</div>)}</details> : null}
 
-      {(staleList.length > 0 || wipExceeded) && (
-        <div className="banner banner-attention">
-          {wipExceeded && (
-            <span className="banner-chip wip">
-              {items.today.length} in Now — over your limit of {settings?.wipLimit}. Pick fewer.
-            </span>
-          )}
-          {staleList.length > 0 && (
-            <span className="banner-line">
-              <strong>Haven&apos;t touched in a while:</strong>{" "}
-              {staleList.slice(0, 6).map((p) => (
-                <button key={p.id} className="banner-chip stale" onClick={() => router.push(`/project/${p.id}`)}>
-                  {p.name} · {p.daysUntouched}d
-                </button>
-              ))}
-            </span>
-          )}
-        </div>
-      )}
-
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
-      >
-        <div className="board">
-          {lanesToShow.map((lane) => (
-            <LaneColumn
-              key={lane}
-              lane={lane}
-              itemIds={items[lane]}
-              byId={byId}
-              isAdding={addingLane === lane}
-              newName={newName}
-              onStartAdd={() => {
-                setAddingLane(lane);
-                setNewName("");
-              }}
-              onChangeName={setNewName}
-              onSubmitAdd={() => addProject(lane)}
-              onCancelAdd={() => setAddingLane(null)}
-              onOpen={openProject}
-              onMove={moveLane}
-              onDelete={deleteProject}
-              wipLimit={lane === "today" ? settings?.wipLimit ?? null : null}
-            />
-          ))}
-        </div>
-
-        <DragOverlay>
-          {activeId && byId[activeId] ? (
-            <Card project={byId[activeId]} dragging onOpen={() => {}} onMove={() => {}} onDelete={() => {}} />
-          ) : null}
-        </DragOverlay>
+      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+        <div className={`trello-board ${showCompleted ? "completed-board" : ""}`}>{stages.map((stage) => <WorkflowColumn key={stage} stage={stage} cards={cards[stage]} hiddenOnMobile={stage !== mobileStage} onAdd={() => setAddingStage(stage)} onEdit={setEditing} onComplete={(card) => void moveCard(card, card.stage === "done" ? "next" : "done")} onArchive={(card) => void archiveCard(card)} />)}</div>
+        <DragOverlay>{activeId && cardById.get(activeId) ? <WorkCard card={cardById.get(activeId)!} dragging /> : null}</DragOverlay>
       </DndContext>
 
-      {backend === "mock" && (
-        <div className="demo-badge">Demo data (in-memory) — set Airtable keys to go live</div>
-      )}
+      {addingStage ? <CardDialog title={`Add to ${WORKFLOW_LABELS[addingStage]}`} boards={(payload?.boards || []).filter((board) => !!board.lists[addingStage])} stage={addingStage} onClose={() => setAddingStage(null)} onSaved={async () => { setAddingStage(null); await load(); }} /> : null}
+      {editing ? <CardDialog title="Edit card" boards={payload?.boards || []} stage={editing.stage} card={editing} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} /> : null}
     </>
   );
 }
 
-function LaneColumn({
-  lane,
-  itemIds,
-  byId,
-  isAdding,
-  newName,
-  onStartAdd,
-  onChangeName,
-  onSubmitAdd,
-  onCancelAdd,
-  onOpen,
-  onMove,
-  onDelete,
-  wipLimit,
-}: {
-  lane: Lane;
-  itemIds: string[];
-  byId: Record<string, ProjectView>;
-  isAdding: boolean;
-  newName: string;
-  onStartAdd: () => void;
-  onChangeName: (v: string) => void;
-  onSubmitAdd: () => void;
-  onCancelAdd: () => void;
-  onOpen: (id: string) => void;
-  onMove: (id: string, dir: "up" | "down") => void;
-  onDelete: (id: string) => void;
-  wipLimit: number | null;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id: lane });
-  return (
-    <section className={`lane lane-${lane} ${isOver ? "lane-over" : ""}`}>
-      <header className="lane-head">
-        <h2>{LANE_LABELS[lane]}</h2>
-        <div className="lane-head-right">
-          <span className="lane-count">
-            {itemIds.length}
-            {wipLimit != null ? ` / ${wipLimit}` : ""}
-          </span>
-          <button className="lane-add" aria-label={`Add to ${LANE_LABELS[lane]}`} onClick={onStartAdd}>
-            +
-          </button>
-        </div>
-      </header>
-
-      <div ref={setNodeRef} className="lane-body">
-        <SortableContext items={itemIds} strategy={rectSortingStrategy}>
-          {itemIds.map((id) => (
-            <SortableCard key={id} id={id} project={byId[id]} onOpen={onOpen} onMove={onMove} onDelete={onDelete} />
-          ))}
-        </SortableContext>
-
-        {isAdding && (
-          <div className="add-card">
-            <input
-              autoFocus
-              value={newName}
-              placeholder="Project name…"
-              onChange={(e) => onChangeName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onSubmitAdd();
-                if (e.key === "Escape") onCancelAdd();
-              }}
-              onBlur={onSubmitAdd}
-            />
-          </div>
-        )}
-
-        {itemIds.length === 0 && !isAdding && <div className="lane-empty">Drop here</div>}
-      </div>
-    </section>
-  );
+function WorkflowColumn({ stage, cards, hiddenOnMobile, onAdd, onEdit, onComplete, onArchive }: { stage: WorkflowStage; cards: TrelloWorkCard[]; hiddenOnMobile: boolean; onAdd: () => void; onEdit: (card: TrelloWorkCard) => void; onComplete: (card: TrelloWorkCard) => void; onArchive: (card: TrelloWorkCard) => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id: stage });
+  return <section className={`workflow-column stage-${stage} ${isOver ? "column-over" : ""} ${hiddenOnMobile ? "mobile-hidden" : ""}`}><header><h2>{WORKFLOW_LABELS[stage]}</h2><div><span>{cards.length}</span>{stage !== "done" ? <button onClick={onAdd} aria-label={`Add to ${WORKFLOW_LABELS[stage]}`}>+</button> : null}</div></header><div ref={setNodeRef} className="workflow-cards"><SortableContext items={cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>{cards.map((card) => <SortableWorkCard key={card.id} card={card} onEdit={onEdit} onComplete={onComplete} onArchive={onArchive} />)}</SortableContext>{cards.length === 0 ? <div className="column-empty">{stage === "done" ? "Nothing completed" : "Drop here"}</div> : null}</div></section>;
 }
 
-function SortableCard({
-  id,
-  project,
-  onOpen,
-  onMove,
-  onDelete,
-}: {
-  id: string;
-  project: ProjectView;
-  onOpen: (id: string) => void;
-  onMove: (id: string, dir: "up" | "down") => void;
-  onDelete: (id: string) => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  };
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="card-wrap">
-      <Card project={project} onOpen={onOpen} onMove={onMove} onDelete={onDelete} />
-    </div>
-  );
+function SortableWorkCard({ card, onEdit, onComplete, onArchive }: { card: TrelloWorkCard; onEdit: (card: TrelloWorkCard) => void; onComplete: (card: TrelloWorkCard) => void; onArchive: (card: TrelloWorkCard) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
+  return <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }} {...attributes} {...listeners}><WorkCard card={card} onEdit={onEdit} onComplete={onComplete} onArchive={onArchive} /></div>;
 }
 
-function Card({
-  project,
-  onOpen,
-  onMove,
-  onDelete,
-  dragging,
-}: {
-  project: ProjectView;
-  onOpen: (id: string) => void;
-  onMove: (id: string, dir: "up" | "down") => void;
-  onDelete: (id: string) => void;
-  dragging?: boolean;
-}) {
-  const wake =
-    project.snoozeUntil && project.agingStage === "snoozed"
-      ? Math.ceil((new Date(project.snoozeUntil).getTime() - Date.now()) / 86400000)
-      : null;
-  const atTop = project.lane === LANES[0];
-  const atBottom = project.lane === LANES[LANES.length - 1];
-  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+function WorkCard({ card, onEdit, onComplete, onArchive, dragging }: { card: TrelloWorkCard; onEdit?: (card: TrelloWorkCard) => void; onComplete?: (card: TrelloWorkCard) => void; onArchive?: (card: TrelloWorkCard) => void; dragging?: boolean }) {
+  const days = ageInDays(card.lastActivityAt);
+  const stop = (event: { stopPropagation: () => void }) => event.stopPropagation();
+  return <article className={`work-card ${dragging ? "dragging" : ""}`} onClick={() => onEdit?.(card)}><div className="work-card-top"><label className="complete-control" onPointerDown={stop} onClick={stop} title={card.stage === "done" ? "Return to Next Up" : "Complete"}><input type="checkbox" checked={card.stage === "done"} onChange={() => onComplete?.(card)} /><span className="sr-only">{card.stage === "done" ? "Return to Next Up" : "Complete"}</span></label><span className="project-pill" title={card.boardName}>{card.boardName}</span><button className="archive-button" onPointerDown={stop} onClick={(event) => { stop(event); onArchive?.(card); }} aria-label={`Archive ${card.name}`} title="Archive">⌫</button></div><h3>{card.name}</h3>{card.description ? <p>{card.description}</p> : null}{card.labels.length ? <div className="card-labels">{card.labels.map((label) => <span key={label.id} style={{ borderColor: labelColor(label.color) }}>{label.name || label.color}</span>)}</div> : null}<div className="work-card-meta">{card.checklistTotal ? <span>☑ {card.checklistComplete}/{card.checklistTotal}</span> : null}{card.due ? <span className={new Date(card.due) < new Date() ? "overdue" : ""}>Due {new Date(card.due).toLocaleDateString()}</span> : null}<span className={days >= 7 ? "stale" : days >= 3 ? "warm" : ""}>{days === 0 ? "today" : `${days}d untouched`}</span></div></article>;
+}
 
-  return (
-    <article
-      className={`card aging-${project.agingStage} ${dragging ? "card-dragging" : ""}`}
-      data-lane={project.lane}
-      onClick={() => onOpen(project.id)}
-    >
-      <div className="card-strip" />
-      {!dragging && (
-        <div className="card-move" onPointerDown={stop}>
-          <button aria-label="Promote" disabled={atTop} onPointerDown={stop} onClick={(e) => { stop(e); onMove(project.id, "up"); }}>
-            ▲
-          </button>
-          <button aria-label="Demote" disabled={atBottom} onPointerDown={stop} onClick={(e) => { stop(e); onMove(project.id, "down"); }}>
-            ▼
-          </button>
-          <button className="card-del" aria-label="Delete" onPointerDown={stop} onClick={(e) => { stop(e); onDelete(project.id); }}>
-            ✕
-          </button>
-        </div>
-      )}
-      <div className="card-main">
-        <h3 className="card-title">{project.name}</h3>
-        <div className="card-meta">
-          {project.repos.length > 0 && (
-            <span className="meta-pill repo" title={project.repos.join(", ")}>
-              ⎇ {project.repos.length} repo{project.repos.length > 1 ? "s" : ""}
-            </span>
-          )}
-          {wake != null ? (
-            <span className="meta-pill snoozed">wakes in {Math.max(0, wake)}d</span>
-          ) : (
-            <span className={`meta-pill age age-${project.agingStage}`}>
-              {project.daysUntouched === 0 ? "today" : `${project.daysUntouched}d untouched`}
-            </span>
-          )}
-        </div>
-      </div>
-    </article>
-  );
+function CardDialog({ title, boards, stage, card, onClose, onSaved }: { title: string; boards: TrelloBoard[]; stage: WorkflowStage; card?: TrelloWorkCard; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [boardId, setBoardId] = useState(card?.boardId || boards[0]?.id || "");
+  const [name, setName] = useState(card?.name || "");
+  const [description, setDescription] = useState(card?.description || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function save() {
+    const trimmed = name.trim();
+    if (!trimmed) { setError("A card title is required."); return; }
+    const listId = boards.find((item) => item.id === boardId)?.lists[stage];
+    if (!card && !listId) { setError(`That project has no ${WORKFLOW_LABELS[stage]} list.`); return; }
+    setSaving(true);
+    try { await api("/api/trello", { method: card ? "PATCH" : "POST", body: JSON.stringify(card ? { cardId: card.id, name: trimmed, description } : { listId, name: trimmed, description }) }); await onSaved(); }
+    catch (saveError) { setError(saveError instanceof Error ? saveError.message : "Save failed"); setSaving(false); }
+  }
+  return <div className="dialog-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><section className="card-dialog" role="dialog" aria-modal="true" aria-labelledby="card-dialog-title"><header><h2 id="card-dialog-title">{title}</h2><button onClick={onClose} aria-label="Close">×</button></header>{!card ? <label>Project<select value={boardId} onChange={(event) => setBoardId(event.target.value)}>{boards.map((board) => <option key={board.id} value={board.id}>{board.name}</option>)}</select></label> : <span className="project-pill dialog-project">{card.boardName}</span>}<label>Title<input autoFocus value={name} onChange={(event) => setName(event.target.value)} /></label><label>Notes<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={10} placeholder="Trello card description…" /></label>{card ? <a className="trello-link" href={card.url} target="_blank" rel="noreferrer">Open in Trello ↗</a> : null}{error ? <p className="error">{error}</p> : null}<footer><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save"}</button></footer></section></div>;
 }
