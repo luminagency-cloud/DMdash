@@ -101,16 +101,28 @@ There is no second task database to reconcile. Dmdash reads and writes Trello di
 
 ## Deployment
 
-The app uses Next.js 16 and React 19. It is configured for standalone output. It can run on Vercel or another Node host. Configure `TRELLO_API_KEY`, `TRELLO_TOKEN` and optionally `APP_PASSWORD` in the hosting environment before deployment.
+The app uses Next.js 16 and React 19. Vercel uses its native Next.js output. Other Node hosts and containers use standalone output. Configure `TRELLO_API_KEY`, `TRELLO_TOKEN` and optionally `APP_PASSWORD` in the hosting environment before deployment.
 
 Production: [dash.davidmarlowe.com](https://dash.davidmarlowe.com)
 
 ## Verification
 
-Run the production build:
+Run the automated tests and production build:
 
 ```bash
+npm test
 npm run build
 ```
+
+GitHub Actions runs both commands for each pull request and each push to `main`. Vercel deploys `main` to Production after its build passes.
+
+The latest verification on 2026-08-27 included:
+
+- 17 automated tests
+- A production build with Node.js 24.18.0
+- A live Trello acceptance test for create, edit, move, reorder, complete, restore, project notes, refresh and archive
+- A successful GitHub Actions run
+- A successful Vercel Production deployment
+- A production login and live Trello read at [dash.davidmarlowe.com](https://dash.davidmarlowe.com)
 
 The repository no longer contains the old Airtable database adapter, local project database, GitHub issue client, or their API routes. Trello is the only application data path.

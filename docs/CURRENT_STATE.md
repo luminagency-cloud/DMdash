@@ -104,10 +104,12 @@ When `APP_PASSWORD` is empty, the application lock is disabled. When it is set, 
 | `src/components/Board.tsx` | Board UI, filters, dialogs, drag-and-drop, and refresh behavior |
 | `src/app/api/trello/route.ts` | Authenticated Trello read and write API |
 | `src/lib/trello.ts` | Trello REST client and workflow mapping |
+| `src/lib/route-input.ts` | API input parsing and validation |
 | `src/lib/types.ts` | Trello command-board types |
 | `src/lib/auth.ts` | Password and cookie token logic |
 | `src/lib/guard.ts` | Page and API authentication checks |
 | `src/components/SettingsForm.tsx` | Connection status and workflow help |
+| `.github/workflows/verify.yml` | Tests and build checks for pull requests and `main` |
 
 ## Technology baseline
 
@@ -126,5 +128,9 @@ The test suite covers workflow aliases, board selection, Trello card conversion,
 A live acceptance test passed on 2026-08-27. It verified card creation, editing, movement, reorder requests, completion, restore, project notes, refresh, and archive cleanup against Trello.
 
 The Vercel production deployment passed on 2026-08-27. The production login and live Trello read passed at `https://dash.davidmarlowe.com`.
+
+Vercel uses its native Next.js output. Other Node hosts and containers use Next.js standalone output. Vercel Preview and Production contain the three required server-side variables.
+
+GitHub Actions passed all 17 tests and the production build for commit `431cc26`.
 
 The ignored `.data/db.json` file can still exist in an old local checkout. The current application does not read it.
