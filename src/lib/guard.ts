@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { COOKIE_NAME, cookieValid } from "./auth";
 
-export function apiAuthed(): boolean {
-  const value = cookies().get(COOKIE_NAME)?.value;
+export async function apiAuthed(): Promise<boolean> {
+  const value = (await cookies()).get(COOKIE_NAME)?.value;
   return cookieValid(value);
 }
 
@@ -13,6 +13,6 @@ export function unauthorized() {
 }
 
 // For server components / pages: bounce to the login screen when locked.
-export function requirePageAuth() {
-  if (!apiAuthed()) redirect("/login");
+export async function requirePageAuth() {
+  if (!(await apiAuthed())) redirect("/login");
 }

@@ -3,8 +3,8 @@ import { requirePageAuth } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsPage() {
-  requirePageAuth();
+export default async function SettingsPage() {
+  await requirePageAuth();
   return (
     <main className="app">
       <SettingsForm />

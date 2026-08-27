@@ -23,10 +23,12 @@ export default function Board() {
   const [error, setError] = useState<string | null>(null);
   const [projectId, setProjectId] = useState("all");
   const [labelId, setLabelId] = useState("all");
+  const [specialView, setSpecialView] = useState<"all" | "priority" | "questions">("all");
   const [query, setQuery] = useState("");
   const [mobileStage, setMobileStage] = useState<WorkflowStage>("next");
   const [showCompleted, setShowCompleted] = useState(false);
   const [editing, setEditing] = useState<TrelloWorkCard | null>(null);
+  const [referenceBoard, setReferenceBoard] = useState<TrelloBoard | null>(null);
   const [addingStage, setAddingStage] = useState<WorkflowStage | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const initialLoad = useRef(true);
@@ -67,12 +69,13 @@ export default function Board() {
     for (const card of payload?.cards || []) {
       if (projectId !== "all" && card.boardId !== projectId) continue;
       if (labelId !== "all" && !card.labels.some((label) => label.id === labelId)) continue;
+      if (specialView !== "all" && !card.labels.some((label) => label.name.trim().toLowerCase() === (specialView === "priority" ? "priority" : "question"))) continue;
       if (needle && !`${card.name}\n${card.description}\n${card.boardName}`.toLowerCase().includes(needle)) continue;
       grouped[card.stage].push(card);
     }
     for (const stage of Object.keys(grouped) as WorkflowStage[]) grouped[stage].sort((a, b) => a.position - b.position);
     return grouped;
-  }, [labelId, payload, projectId, query]);
+  }, [labelId, payload, projectId, query, specialView]);
 
   const cardById = useMemo(() => new Map((payload?.cards || []).map((card) => [card.id, card])), [payload]);
   const stages = showCompleted ? ["done" as const] : ACTIVE_STAGES;
@@ -135,7 +138,9 @@ export default function Board() {
       <div className="command-toolbar">
         <select value={projectId} onChange={(event) => setProjectId(event.target.value)} aria-label="Filter by project"><option value="all">All projects</option>{(payload?.boards || []).map((board) => <option key={board.id} value={board.id}>{board.name}</option>)}</select>
         <select value={labelId} onChange={(event) => setLabelId(event.target.value)} aria-label="Filter by label"><option value="all">All labels</option>{labels.map((label) => <option key={label.id} value={label.id}>{label.name || label.color || "Unnamed"}</option>)}</select>
+        <select value={specialView} onChange={(event) => setSpecialView(event.target.value as "all" | "priority" | "questions")} aria-label="Quick view"><option value="all">All work</option><option value="priority">Priority</option><option value="questions">Questions</option></select>
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search cards…" aria-label="Search cards" />
+        <button className="btn" onClick={() => { const boards = payload?.boards || []; const selected = boards.find((board) => board.id === projectId); if (selected) setReferenceBoard(selected); else if (boards.length === 1) setReferenceBoard(boards[0]); else setError("Select one project to open its reference notes."); }}>Project notes</button>
         <button className="btn" onClick={() => void load()} disabled={refreshing}>{refreshing ? "Refreshing…" : "Refresh"}</button>
         <button className={`btn ${showCompleted ? "btn-primary" : ""}`} onClick={() => { setShowCompleted((value) => !value); setMobileStage(showCompleted ? "next" : "done"); }}>{showCompleted ? "Active work" : "Completed"}</button>
         <span className="sync-time">{payload ? `Updated ${new Date(payload.syncedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</span>
@@ -152,8 +157,22 @@ export default function Board() {
 
       {addingStage ? <CardDialog title={`Add to ${WORKFLOW_LABELS[addingStage]}`} boards={(payload?.boards || []).filter((board) => !!board.lists[addingStage])} stage={addingStage} onClose={() => setAddingStage(null)} onSaved={async () => { setAddingStage(null); await load(); }} /> : null}
       {editing ? <CardDialog title="Edit card" boards={payload?.boards || []} stage={editing.stage} card={editing} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} /> : null}
+      {referenceBoard ? <ProjectReferenceDialog board={referenceBoard} onClose={() => setReferenceBoard(null)} onSaved={async () => { setReferenceBoard(null); await load(); }} /> : null}
     </>
   );
+}
+
+function ProjectReferenceDialog({ board, onClose, onSaved }: { board: TrelloBoard; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [description, setDescription] = useState(board.description);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try { await api("/api/trello", { method: "PATCH", body: JSON.stringify({ boardId: board.id, description }) }); await onSaved(); }
+    catch (saveError) { setError(saveError instanceof Error ? saveError.message : "Could not save project notes"); setSaving(false); }
+  }
+  return <div className="dialog-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><section className="card-dialog" role="dialog" aria-modal="true" aria-labelledby="project-reference-title"><header><h2 id="project-reference-title">{board.name} notes</h2><button onClick={onClose} aria-label="Close">×</button></header><p className="muted">Keep the project summary, useful links, open questions, and other reference information here. DMdash stores this text in the Trello board description.</p><label>Project notes<textarea autoFocus value={description} onChange={(event) => setDescription(event.target.value)} rows={16} placeholder={"Summary\n\nLinks\n- https://...\n\nOpen questions\n- ..."} /></label><a className="trello-link" href={board.url} target="_blank" rel="noreferrer">Open board in Trello ↗</a>{error ? <p className="error">{error}</p> : null}<footer><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save"}</button></footer></section></div>;
 }
 
 function WorkflowColumn({ stage, cards, hiddenOnMobile, onAdd, onEdit, onComplete, onArchive }: { stage: WorkflowStage; cards: TrelloWorkCard[]; hiddenOnMobile: boolean; onAdd: () => void; onEdit: (card: TrelloWorkCard) => void; onComplete: (card: TrelloWorkCard) => void; onArchive: (card: TrelloWorkCard) => void }) {

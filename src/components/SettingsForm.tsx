@@ -32,8 +32,8 @@ export default function SettingsForm() {
       </section>
       <section className="panel setting-section">
         <h2>Standard board workflow</h2>
-        <ol className="workflow-list"><li>To Do</li><li>Next Up</li><li>In Progress</li><li>Waiting</li><li>Done</li></ol>
-        <p className="muted">Dmdash also recognizes Backlog, Next, Doing, Blocked, Complete and Completed as aliases.</p>
+        <ol className="workflow-list"><li>2do</li><li>Next Up</li><li>Working</li><li>Waiting</li><li>Done</li></ol>
+        <p className="muted">Dmdash also recognizes To Do, Todo, Backlog, Next, In Progress, Doing, Blocked, Complete and Completed as aliases.</p>
       </section>
       <div className="settings-actions"><button className="btn" onClick={logout}>Log out</button></div>
     </div>

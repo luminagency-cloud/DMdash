@@ -4,8 +4,8 @@ import { requirePageAuth } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
-export default function BoardPage() {
-  requirePageAuth();
+export default async function BoardPage() {
+  await requirePageAuth();
   return (
     <main className="app">
       <header className="app-header">

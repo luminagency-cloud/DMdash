@@ -1,8 +1,8 @@
 # Dmdash
 
-Dmdash is a private, responsive command board built on top of Trello. Trello remains the only source of truth; Dmdash supplies the cross-project view that Trello's free interface does not.
+Dmdash is a private, responsive command board built on top of Trello. Trello is the only source of truth. Dmdash supplies one cross-project view of selected Trello boards.
 
-Version **2.0.0** changes the original project-level Airtable command board into a Trello card client.
+See [Current state](docs/CURRENT_STATE.md) for the runtime flow, system boundaries, environment variables, and verification status.
 
 ## Data model
 
@@ -19,13 +19,13 @@ Version **2.0.0** changes the original project-level Airtable command board into
 
 Every project board should contain these open lists:
 
-1. **To Do** — uncommitted brain dump
+1. **2do** — uncommitted brain dump
 2. **Next Up** — deliberately selected upcoming work
-3. **In Progress** — active work
+3. **Working** — active work
 4. **Waiting** — blocked by someone or something
 5. **Done** — completed work, hidden from the normal board
 
-Dmdash also recognizes these aliases for existing boards: Backlog, Todo, Next, Doing, Blocked, Complete and Completed. The Settings page and board warning identify missing workflow lists.
+Dmdash also recognizes these aliases for existing boards: To Do, Todo, Backlog, Next, In Progress, Doing, Blocked, Complete and Completed. The Settings page and board warning identify missing workflow lists.
 
 A Trello board opts into Dmdash as soon as it contains at least one recognized workflow list. Boards with no recognized lists are ignored.
 
@@ -36,7 +36,7 @@ A Trello board opts into Dmdash as soon as it contains at least one recognized w
 - Mandatory project pill on every card
 - Trello descriptions surfaced directly on cards
 - Labels, due dates, checklist progress and aging indicators
-- Drag To Do → Next Up → In Progress → Waiting, and reorder cards within their project list
+- Drag 2do → Next Up → Working → Waiting, and reorder cards within their project list
 - Checkbox completion that moves a card to Done and hides it
 - Completed view with the ability to return a card to Next Up
 - Create and edit cards from Dmdash
@@ -72,6 +72,12 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+Requirements:
+
+- Node.js 24 LTS
+- npm
+- A Trello API key and token for live data
+
 ## Synchronization behavior
 
 There is no second task database to reconcile. Dmdash reads and writes Trello directly.
@@ -95,8 +101,14 @@ There is no second task database to reconcile. Dmdash reads and writes Trello di
 
 ## Deployment
 
-The app is a Next.js 14 application configured for standalone output. It can run on Vercel or any Node host. Configure `TRELLO_API_KEY`, `TRELLO_TOKEN` and optionally `APP_PASSWORD` in the hosting environment before deployment.
+The app uses Next.js 16 and React 19. It is configured for standalone output. It can run on Vercel or another Node host. Configure `TRELLO_API_KEY`, `TRELLO_TOKEN` and optionally `APP_PASSWORD` in the hosting environment before deployment.
 
-## Legacy code
+## Verification
 
-The repository still contains the original Airtable project/task routes and GitHub issue integration during the transition. They are no longer used by the main Dmdash interface. They can be removed after the Trello 2.0 flow is verified with live credentials.
+Run the production build:
+
+```bash
+npm run build
+```
+
+The repository no longer contains the old Airtable database adapter, local project database, GitHub issue client, or their API routes. Trello is the only application data path.

@@ -6,6 +6,7 @@ import {
   readCommandBoard,
   trelloConfigured,
   updateTrelloCard,
+  updateTrelloBoard,
 } from "@/lib/trello";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ function failed(error: unknown) {
 }
 
 export async function GET(req: NextRequest) {
-  if (!apiAuthed()) return unauthorized();
+  if (!(await apiAuthed())) return unauthorized();
   if (req.nextUrl.searchParams.get("status") === "1") {
     return NextResponse.json({ configured: trelloConfigured(), backend: "trello" });
   }
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!apiAuthed()) return unauthorized();
+  if (!(await apiAuthed())) return unauthorized();
   try {
     const body = await req.json();
     if (!body.listId || !String(body.name || "").trim()) {
@@ -46,9 +47,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!apiAuthed()) return unauthorized();
+  if (!(await apiAuthed())) return unauthorized();
   try {
     const body = await req.json();
+    if (body.boardId) {
+      const board = await updateTrelloBoard(String(body.boardId), String(body.description || ""));
+      return NextResponse.json({ board });
+    }
     if (!body.cardId) return NextResponse.json({ error: "cardId is required" }, { status: 400 });
     const card = await updateTrelloCard(String(body.cardId), {
       name: body.name === undefined ? undefined : String(body.name).trim(),
@@ -69,7 +74,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!apiAuthed()) return unauthorized();
+  if (!(await apiAuthed())) return unauthorized();
   try {
     const cardId = req.nextUrl.searchParams.get("cardId");
     if (!cardId) return NextResponse.json({ error: "cardId is required" }, { status: 400 });

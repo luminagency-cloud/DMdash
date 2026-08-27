@@ -9,7 +9,7 @@ import {
 
 const API = "https://api.trello.com/1";
 
-type RawBoard = { id: string; name: string; url: string };
+type RawBoard = { id: string; name: string; desc?: string; url: string };
 type RawList = { id: string; name: string };
 type RawChecklist = { checkItems?: { state: string }[] };
 type RawCard = {
@@ -55,11 +55,13 @@ async function request<T>(path: string, init?: RequestInit, params?: Record<stri
 }
 
 const aliases: Record<string, WorkflowStage> = {
+  "2do": "todo",
   "to do": "todo",
   todo: "todo",
   backlog: "todo",
   "next up": "next",
   next: "next",
+  working: "progress",
   "in progress": "progress",
   doing: "progress",
   waiting: "waiting",
@@ -76,7 +78,7 @@ function stageFor(name: string): WorkflowStage | undefined {
 export async function readCommandBoard(): Promise<CommandBoardPayload> {
   const rawBoards = await request<RawBoard[]>("/members/me/boards", undefined, {
     filter: "open",
-    fields: "name,url",
+    fields: "name,desc,url",
   });
 
   const boardResults = await Promise.all(
@@ -101,7 +103,7 @@ export async function readCommandBoard(): Promise<CommandBoardPayload> {
         }
       }
 
-      const board: TrelloBoard = { id: rawBoard.id, name: rawBoard.name, url: rawBoard.url, lists };
+      const board: TrelloBoard = { id: rawBoard.id, name: rawBoard.name, description: rawBoard.desc || "", url: rawBoard.url, lists };
       const cards: TrelloWorkCard[] = rawCards.flatMap((card) => {
         const stage = stageByList.get(card.idList);
         if (!stage) return [];
@@ -167,4 +169,8 @@ export async function updateTrelloCard(
 
 export async function archiveTrelloCard(cardId: string) {
   return request<RawCard>(`/cards/${cardId}`, { method: "PUT" }, { closed: "true" });
+}
+
+export async function updateTrelloBoard(boardId: string, description: string) {
+  return request<RawBoard>(`/boards/${boardId}`, { method: "PUT" }, { desc: description });
 }
