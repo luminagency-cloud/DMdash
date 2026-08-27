@@ -103,6 +103,8 @@ There is no second task database to reconcile. Dmdash reads and writes Trello di
 
 The app uses Next.js 16 and React 19. It is configured for standalone output. It can run on Vercel or another Node host. Configure `TRELLO_API_KEY`, `TRELLO_TOKEN` and optionally `APP_PASSWORD` in the hosting environment before deployment.
 
+Production: [dash.davidmarlowe.com](https://dash.davidmarlowe.com)
+
 ## Verification
 
 Run the production build:

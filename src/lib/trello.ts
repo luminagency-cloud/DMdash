@@ -71,7 +71,7 @@ const aliases: Record<string, WorkflowStage> = {
   completed: "done",
 };
 
-function stageFor(name: string): WorkflowStage | undefined {
+export function stageFor(name: string): WorkflowStage | undefined {
   return aliases[name.trim().toLowerCase()];
 }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiAuthed, unauthorized } from "@/lib/guard";
+import { cardIdFrom, parseCreateCardInput } from "@/lib/route-input";
 import {
   archiveTrelloCard,
   createTrelloCard,
@@ -32,14 +33,11 @@ export async function POST(req: NextRequest) {
   if (!(await apiAuthed())) return unauthorized();
   try {
     const body = await req.json();
-    if (!body.listId || !String(body.name || "").trim()) {
+    const input = parseCreateCardInput(body);
+    if (!input) {
       return NextResponse.json({ error: "listId and name are required" }, { status: 400 });
     }
-    const card = await createTrelloCard({
-      listId: String(body.listId),
-      name: String(body.name).trim(),
-      description: String(body.description || ""),
-    });
+    const card = await createTrelloCard(input);
     return NextResponse.json({ card });
   } catch (error) {
     return failed(error);
@@ -54,8 +52,9 @@ export async function PATCH(req: NextRequest) {
       const board = await updateTrelloBoard(String(body.boardId), String(body.description || ""));
       return NextResponse.json({ board });
     }
-    if (!body.cardId) return NextResponse.json({ error: "cardId is required" }, { status: 400 });
-    const card = await updateTrelloCard(String(body.cardId), {
+    const cardId = cardIdFrom(body);
+    if (!cardId) return NextResponse.json({ error: "cardId is required" }, { status: 400 });
+    const card = await updateTrelloCard(cardId, {
       name: body.name === undefined ? undefined : String(body.name).trim(),
       description: body.description === undefined ? undefined : String(body.description),
       listId: body.listId === undefined ? undefined : String(body.listId),

@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
   reactStrictMode: true,
+  // Vercel creates its own deployment output. Standalone output is for
+  // another Node.js host or a container.
+  ...(process.env.VERCEL ? {} : { output: 'standalone' }),
 };
 
 export default nextConfig;

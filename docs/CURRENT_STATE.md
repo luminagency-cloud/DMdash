@@ -1,6 +1,6 @@
 # Dmdash current state
 
-Last updated: 2026-08-16
+Last updated: 2026-08-27
 
 ## Purpose
 
@@ -119,8 +119,12 @@ When `APP_PASSWORD` is empty, the application lock is disabled. When it is set, 
 
 ## Verification status
 
-The production build passed on 2026-08-16 with Node.js 24.18.0.
+The automated test suite and production build passed on 2026-08-27 with Node.js 24.18.0.
 
-This proves compilation, TypeScript validation, route generation, and static page generation. It does not prove live Trello access. Live verification needs valid `TRELLO_API_KEY` and `TRELLO_TOKEN` values.
+The test suite covers workflow aliases, board selection, Trello card conversion, checklist totals, missing workflow lists, and API input validation.
+
+A live acceptance test passed on 2026-08-27. It verified card creation, editing, movement, reorder requests, completion, restore, project notes, refresh, and archive cleanup against Trello.
+
+The Vercel production deployment passed on 2026-08-27. The production login and live Trello read passed at `https://dash.davidmarlowe.com`.
 
 The ignored `.data/db.json` file can still exist in an old local checkout. The current application does not read it.
