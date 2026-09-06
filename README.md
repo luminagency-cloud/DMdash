@@ -59,6 +59,8 @@ TRELLO_MCP_TOKEN=
 
 Copy `.env.local.example` to `.env.local` for local development. Add the same variables to the deployment environment. Never expose either value through a `NEXT_PUBLIC_` variable.
 
+These values connect Dmdash to the MCP Worker. They are not the Trello API credentials. The Worker uses a Trello **API Key** and a Trello **Token**. Do not use the Trello **Secret** as the token. Generate the token from the **Token** link beside the API key and approve access.
+
 Optional app lock:
 
 ```bash

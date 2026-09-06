@@ -133,7 +133,7 @@ Vercel uses its native Next.js output. Other Node hosts and containers use Next.
 
 GitHub Actions passed all 17 tests and the production build for commit `431cc26`.
 
-On 2026-09-06, the Trello MCP service returned `Trello request failed (401): invalid key`. The same failure occurred with the local Worker credentials. The Worker needs a valid `TRELLO_API_KEY` and `TRELLO_TOKEN` before board reads and writes can operate.
+On 2026-09-06, the Trello MCP service returned `Trello request failed (401): invalid key`. The Trello credentials were corrected, and a direct Trello credential check then returned HTTP 200.
 
 Dmdash now returns safe MCP error text to the user. The test suite contains 19 tests, including tests for MCP error details and the fallback error message.
 
