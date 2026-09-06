@@ -28,7 +28,7 @@ export default function SettingsForm() {
         <p className={configured ? "connection-good" : "error"}>
           {configured === null ? "Checking…" : configured ? "Connected through server environment variables." : "Not configured."}
         </p>
-        <p className="muted">Set <code>TRELLO_API_KEY</code> and <code>TRELLO_TOKEN</code> in the deployment environment. Credentials never reach the browser.</p>
+        <p className="muted">Set <code>TRELLO_MCP_URL</code> and <code>TRELLO_MCP_TOKEN</code> in the deployment environment. The token never reaches the browser.</p>
       </section>
       <section className="panel setting-section">
         <h2>Standard board workflow</h2>

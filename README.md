@@ -1,19 +1,21 @@
 # Dmdash
 
 Dmdash is a private, responsive command board built on top of Trello. Trello is the only source of truth. Dmdash supplies one cross-project view of selected Trello boards.
+-Vercel
+-trello mcp
 
 See [Current state](docs/CURRENT_STATE.md) for the runtime flow, system boundaries, environment variables, and verification status.
 
 ## Data model
 
-| Dmdash | Trello |
-|---|---|
-| Project | Board |
-| Workflow stage | List |
-| Work item, bug, reminder or idea | Card |
-| Type or classification | Label |
-| Notes | Card description |
-| Steps | Checklist |
+| Dmdash                           | Trello           |
+| -------------------------------- | ---------------- |
+| Project                          | Board            |
+| Workflow stage                   | List             |
+| Work item, bug, reminder or idea | Card             |
+| Type or classification           | Label            |
+| Notes                            | Card description |
+| Steps                            | Checklist        |
 
 ## Standard workflow
 
@@ -51,8 +53,8 @@ A Trello board opts into Dmdash as soon as it contains at least one recognized w
 Dmdash needs its own Trello credentials; it cannot use a ChatGPT or Claude connector session. Keep both values server-side:
 
 ```bash
-TRELLO_API_KEY=
-TRELLO_TOKEN=
+TRELLO_MCP_URL=https://trello-mcp.luminagency.workers.dev/mcp
+TRELLO_MCP_TOKEN=
 ```
 
 Copy `.env.local.example` to `.env.local` for local development. Add the same variables to the deployment environment. Never expose either value through a `NEXT_PUBLIC_` variable.
@@ -80,7 +82,7 @@ Requirements:
 
 ## Synchronization behavior
 
-There is no second task database to reconcile. Dmdash reads and writes Trello directly.
+There is no second task database to reconcile. Dmdash reads and writes Trello through the controlled Trello MCP service.
 
 - Initial page load fetches all open boards, workflow lists and visible cards.
 - Returning to the browser tab or foregrounding the PWA refreshes immediately.
@@ -90,18 +92,18 @@ There is no second task database to reconcile. Dmdash reads and writes Trello di
 
 ## Card operations
 
-| Dmdash action | Trello result |
-|---|---|
-| Create | Creates a card in the selected board and workflow list |
-| Edit | Updates the Trello card title and description |
-| Drag | Moves the card to the matching list on its own board |
-| Complete | Moves the card to that board's Done list |
-| Restore | Moves a completed card to Next Up |
-| Archive | Sets the Trello card to closed; it remains recoverable in Trello |
+| Dmdash action | Trello result                                                    |
+| ------------- | ---------------------------------------------------------------- |
+| Create        | Creates a card in the selected board and workflow list           |
+| Edit          | Updates the Trello card title and description                    |
+| Drag          | Moves the card to the matching list on its own board             |
+| Complete      | Moves the card to that board's Done list                         |
+| Restore       | Moves a completed card to Next Up                                |
+| Archive       | Sets the Trello card to closed; it remains recoverable in Trello |
 
 ## Deployment
 
-The app uses Next.js 16 and React 19. Vercel uses its native Next.js output. Other Node hosts and containers use standalone output. Configure `TRELLO_API_KEY`, `TRELLO_TOKEN` and optionally `APP_PASSWORD` in the hosting environment before deployment.
+The app uses Next.js 16 and React 19. Vercel uses its native Next.js output. Other Node hosts and containers use standalone output. Configure `TRELLO_MCP_URL`, `TRELLO_MCP_TOKEN`, and optionally `APP_PASSWORD` in the hosting environment before deployment.
 
 Production: [dash.davidmarlowe.com](https://dash.davidmarlowe.com)
 
@@ -125,4 +127,4 @@ The latest verification on 2026-08-27 included:
 - A successful Vercel Production deployment
 - A production login and live Trello read at [dash.davidmarlowe.com](https://dash.davidmarlowe.com)
 
-The repository no longer contains the old Airtable database adapter, local project database, GitHub issue client, or their API routes. Trello is the only application data path.
+Trello is the only application data path.

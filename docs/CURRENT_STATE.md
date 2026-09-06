@@ -4,7 +4,7 @@ Last updated: 2026-08-27
 
 ## Purpose
 
-Dmdash gives one command-board view of work from multiple Trello boards. It does not copy Trello data to another database. All card reads and writes go directly to Trello.
+Dmdash gives one command-board view of work from multiple Trello boards. It does not copy Trello data to another database. All card reads and writes go through the controlled Trello MCP service.
 
 ## System flow
 
@@ -89,8 +89,8 @@ The server uses these variables:
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `TRELLO_API_KEY` | Yes | Identifies the Trello application |
-| `TRELLO_TOKEN` | Yes | Gives the server access to the Trello member |
+| `TRELLO_MCP_URL` | Yes | Identifies the Trello MCP endpoint |
+| `TRELLO_MCP_TOKEN` | Yes | Authenticates Dmdash to the Trello MCP service |
 | `APP_PASSWORD` | No | Enables the single-password application lock |
 
 Keep all three variables on the server. Do not use a `NEXT_PUBLIC_` prefix.

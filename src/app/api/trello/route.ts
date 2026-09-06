@@ -20,7 +20,7 @@ function failed(error: unknown) {
 export async function GET(req: NextRequest) {
   if (!(await apiAuthed())) return unauthorized();
   if (req.nextUrl.searchParams.get("status") === "1") {
-    return NextResponse.json({ configured: trelloConfigured(), backend: "trello" });
+    return NextResponse.json({ configured: trelloConfigured(), backend: "trello-mcp" });
   }
   try {
     return NextResponse.json(await readCommandBoard());
