@@ -29,15 +29,24 @@ async function withClient<T>(operation: (client: Client) => Promise<T>): Promise
   }
 }
 
-function toolData<T>(result: CallToolResult): T {
-  if (result.isError) throw new Error("The Trello MCP tool reported an error.");
+export function toolData<T>(result: CallToolResult): T {
+  if (result.isError) {
+    const detail = result.content
+      .filter((content) => content.type === "text")
+      .map((content) => content.text.trim())
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, 500);
+    throw new Error(detail || "The Trello MCP tool reported an error.");
+  }
   const item = result.content.find((content) => content.type === "text");
   if (!item || item.type !== "text") throw new Error("The Trello MCP tool returned no JSON data.");
   return JSON.parse(item.text) as T;
 }
 
 async function callTool<T>(client: Client, name: string, args: Record<string, unknown> = {}): Promise<T> {
-  return toolData<T>(await client.callTool({ name, arguments: args }));
+  const result = await client.callTool({ name, arguments: args });
+  return toolData<T>(result);
 }
 
 const aliases: Record<string, WorkflowStage> = {

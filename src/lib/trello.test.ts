@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commandBoardPayload, stageFor } from "./trello";
+import { commandBoardPayload, stageFor, toolData } from "./trello";
 
 describe("stageFor", () => {
   it.each([
@@ -8,6 +8,19 @@ describe("stageFor", () => {
   ])("maps %s to %s", (name, stage) => expect(stageFor(name)).toBe(stage));
 
   it("ignores an unrelated list", () => expect(stageFor("Reference" )).toBeUndefined());
+});
+
+describe("toolData", () => {
+  it("returns the MCP error text", () => {
+    expect(() => toolData({
+      isError: true,
+      content: [{ type: "text", text: "Trello request failed (401): invalid key" }],
+    })).toThrow("Trello request failed (401): invalid key");
+  });
+
+  it("uses a fallback when the MCP error has no text", () => {
+    expect(() => toolData({ isError: true, content: [] })).toThrow("The Trello MCP tool reported an error.");
+  });
 });
 
 describe("commandBoardPayload", () => {

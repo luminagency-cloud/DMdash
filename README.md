@@ -118,7 +118,7 @@ npm run build
 
 GitHub Actions runs both commands for each pull request and each push to `main`. Vercel deploys `main` to Production after its build passes.
 
-The latest verification on 2026-08-27 included:
+The verification on 2026-08-27 included:
 
 - 17 automated tests
 - A production build with Node.js 24.18.0
@@ -128,3 +128,7 @@ The latest verification on 2026-08-27 included:
 - A production login and live Trello read at [dash.davidmarlowe.com](https://dash.davidmarlowe.com)
 
 Trello is the only application data path.
+
+## Troubleshooting
+
+If the board reports `Trello request failed (401): invalid key`, the Trello API key in the `trello-mcp` Worker is not valid. Create or recover a valid Trello API key and token. Then update the Worker secrets `TRELLO_API_KEY` and `TRELLO_TOKEN` and deploy the Worker again.

@@ -1,6 +1,6 @@
 # Dmdash current state
 
-Last updated: 2026-08-27
+Last updated: 2026-09-06
 
 ## Purpose
 
@@ -132,5 +132,9 @@ The Vercel production deployment passed on 2026-08-27. The production login and 
 Vercel uses its native Next.js output. Other Node hosts and containers use Next.js standalone output. Vercel Preview and Production contain the three required server-side variables.
 
 GitHub Actions passed all 17 tests and the production build for commit `431cc26`.
+
+On 2026-09-06, the Trello MCP service returned `Trello request failed (401): invalid key`. The same failure occurred with the local Worker credentials. The Worker needs a valid `TRELLO_API_KEY` and `TRELLO_TOKEN` before board reads and writes can operate.
+
+Dmdash now returns safe MCP error text to the user. The test suite contains 19 tests, including tests for MCP error details and the fallback error message.
 
 The ignored `.data/db.json` file can still exist in an old local checkout. The current application does not read it.
