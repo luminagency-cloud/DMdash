@@ -6,6 +6,8 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "mcp:sync": "node scripts/sync-mcp-config.mjs",
+    "postinstall": "node scripts/sync-mcp-config.mjs",
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",

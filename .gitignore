@@ -11,3 +11,5 @@ out
 .vercel
 
 .env*
+.mcp.json
+.codex/config.toml

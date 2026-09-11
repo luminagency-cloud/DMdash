@@ -4,7 +4,7 @@ Dmdash is a private, responsive command board built on top of Trello. Trello is 
 -Vercel
 -trello mcp
 
-See [Current state](docs/CURRENT_STATE.md) for the runtime flow, system boundaries, environment variables, and verification status.
+Use the [DMdash Trello board](https://trello.com/b/jYLErPPz/dmdash) for all project status, bugs, to-dos, and verification results. See [Architecture](docs/ARCHITECTURE.md) for the runtime flow, system boundaries, and environment variables.
 
 ## Data model
 
@@ -58,6 +58,12 @@ TRELLO_MCP_TOKEN=
 ```
 
 Copy `.env.local.example` to `.env.local` for local development. Add the same variables to the deployment environment. Never expose either value through a `NEXT_PUBLIC_` variable.
+
+The runtime token (`TRELLO_MCP_TOKEN`) uses the `dmdash` client profile with access to all boards. This includes the DMdash board.
+
+For coding tools, set a separate `TRELLO_PROJECT_MCP_TOKEN` in `.env.local`. Its `dmdash-project` profile has access only to [the DMdash board](https://trello.com/b/jYLErPPz/dmdash). Run `npm run mcp:sync` to generate the `dmdash-trello` connection for Codex and Claude Code. Installation also runs this command. The generated `.mcp.json` and `.codex/config.toml` files are excluded from Git. Existing connections are kept.
+
+Cloudflare KV stores each token hash and its access profile. Keep the raw tokens in `.env.local`; KV cannot recover them. Only the runtime token is needed in the deployment environment.
 
 These values connect Dmdash to the MCP Worker. They are not the Trello API credentials. The Worker uses a Trello **API Key** and a Trello **Token**. Do not use the Trello **Secret** as the token. Generate the token from the **Token** link beside the API key and approve access.
 
@@ -120,16 +126,7 @@ npm run build
 
 GitHub Actions runs both commands for each pull request and each push to `main`. Vercel deploys `main` to Production after its build passes.
 
-The verification on 2026-08-27 included:
-
-- 17 automated tests
-- A production build with Node.js 24.18.0
-- A live Trello acceptance test for create, edit, move, reorder, complete, restore, project notes, refresh and archive
-- A successful GitHub Actions run
-- A successful Vercel Production deployment
-- A production login and live Trello read at [dash.davidmarlowe.com](https://dash.davidmarlowe.com)
-
-Trello is the only application data path.
+Record verification results on the related Trello card. Trello is the only application data path.
 
 ## Troubleshooting
 

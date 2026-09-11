@@ -1,6 +1,4 @@
-# Dmdash current state
-
-Last updated: 2026-09-06
+# Dmdash architecture
 
 ## Purpose
 
@@ -14,13 +12,14 @@ flowchart LR
     P --> A["/api/trello"]
     A --> G["Password-cookie check"]
     G --> C["Server-only Trello client"]
-    C --> T["Trello REST API"]
+    C --> M["Trello MCP service"]
+    M --> T["Trello REST API"]
     T --> C
     C --> A
     A --> P
 ```
 
-The browser never receives the Trello API key or token. The server adds these values to Trello requests.
+The browser never receives the Trello API key or token. The server sends its MCP token to the Trello MCP service. The service holds the Trello API credentials.
 
 ## Source of truth
 
@@ -103,7 +102,7 @@ When `APP_PASSWORD` is empty, the application lock is disabled. When it is set, 
 |---|---|
 | `src/components/Board.tsx` | Board UI, filters, dialogs, drag-and-drop, and refresh behavior |
 | `src/app/api/trello/route.ts` | Authenticated Trello read and write API |
-| `src/lib/trello.ts` | Trello REST client and workflow mapping |
+| `src/lib/trello.ts` | Trello MCP client and workflow mapping |
 | `src/lib/route-input.ts` | API input parsing and validation |
 | `src/lib/types.ts` | Trello command-board types |
 | `src/lib/auth.ts` | Password and cookie token logic |
@@ -119,22 +118,3 @@ When `APP_PASSWORD` is empty, the application lock is disabled. When it is set, 
 - dnd-kit Core 6.3.1 and Sortable 10.0.0
 - Node.js 24 LTS
 
-## Verification status
-
-The automated test suite and production build passed on 2026-08-27 with Node.js 24.18.0.
-
-The test suite covers workflow aliases, board selection, Trello card conversion, checklist totals, missing workflow lists, and API input validation.
-
-A live acceptance test passed on 2026-08-27. It verified card creation, editing, movement, reorder requests, completion, restore, project notes, refresh, and archive cleanup against Trello.
-
-The Vercel production deployment passed on 2026-08-27. The production login and live Trello read passed at `https://dash.davidmarlowe.com`.
-
-Vercel uses its native Next.js output. Other Node hosts and containers use Next.js standalone output. Vercel Preview and Production contain the three required server-side variables.
-
-GitHub Actions passed all 17 tests and the production build for commit `431cc26`.
-
-On 2026-09-06, the Trello MCP service returned `Trello request failed (401): invalid key`. The Trello credentials were corrected, and a direct Trello credential check then returned HTTP 200.
-
-Dmdash now returns safe MCP error text to the user. The test suite contains 19 tests, including tests for MCP error details and the fallback error message.
-
-The ignored `.data/db.json` file can still exist in an old local checkout. The current application does not read it.
